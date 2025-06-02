@@ -29,4 +29,5 @@ bin/
 .DS_Store
 
 # Maven
-/target
+/target/
+target/
