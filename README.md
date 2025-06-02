@@ -24,6 +24,7 @@ PFeasel Paint Creator is a Java Swing-based 2D vector graphics application. It a
     * Open (supports `.pfd` custom format).
     * Save (supports `.pfd` custom format).
     * Save As... (supports `.pfd` custom format).
+    * Exit (with confirmation dialog).
 * **Visual Aids**:
     * Toggleable grid display.
     * Snap-to-grid functionality.
@@ -36,7 +37,7 @@ PFeasel Paint Creator is a Java Swing-based 2D vector graphics application. It a
 
 ### Prerequisites
 * Java Development Kit (JDK) 11 or newer.
-* [Maven 3.3.0](https://maven.apache.org/) (for building and running)
+* [Maven 3.3.0](https://maven.apache.org/)
 
 ### Steps
 
@@ -58,12 +59,12 @@ PFeasel Paint Creator is a Java Swing-based 2D vector graphics application. It a
 
 ## How to Use
 
-* Select drawing tools from the toolbox window (opens to the right of the main window).
-* Adjust element properties (colors, stroke, font, shadow, etc.) using the controls in the toolbox.
-* Line color is adjusted from the <strong>Stroke</strong> color option
+* Select drawing tools from the toolbox window
+* Adjust element properties (colors, stroke, font, shadow) using the controls in the toolbox.
+* Line color is adjusted from the <strong>Stroke</strong> color option.
 * Draw elements directly on the main canvas.
 * Manage drawing elements as layers using the "Layers" list in the toolbox.
-* Use the "File" menu for creating new drawings, opening existing ones, or saving your work.
+* Use the "File" menu for creating new drawings, opening existing ones, saving your work, or exiting the application.
 * Use the "Edit" menu for Undo and Redo actions.
 * Toggle visual aids like the grid or anti-aliasing via the "View" menu in the toolbox.
 * Use "Generate Code..." from the File menu to export Java2D code for your drawing.
@@ -75,8 +76,14 @@ PFeasel Paint Creator is a Java Swing-based 2D vector graphics application. It a
 
 ## Dependencies
 
-* Java Development Kit (JDK) 11 or newer.
-* [FlatLaf](https://www.formdev.com/flatlaf/) (modern look and feel, included via Maven)
+* [FlatLaf](https://www.formdev.com/flatlaf/) (modern look and feel)
+* [SLF4J](https://www.slf4j.org/) (logging API)
+
+## Project Structure & Open Source Readiness
+
+* Follows standard Maven directory layout (`src/main/java`, `src/main/resources`).
+* All resources (icons, images) are included in the JAR and loaded from the classpath.
+* Ready for open source contributions and issue tracking.
 
 ## Future Enhancements
 
@@ -93,6 +100,16 @@ Contributions are welcome! Please open an issue or submit a pull request.
 ## License
 
 [MIT License](LICENSE)
+
+## Attributions
+
+Tool icons are sourced from the following open source icon sets via [Iconify](https://icon-sets.iconify.design/):
+
+- [Game Icons](https://icon-sets.iconify.design/game-icons/)
+- [Hugeicons](https://icon-sets.iconify.design/hugeicons/)
+- [Material Symbols](https://icon-sets.iconify.design/material-symbols/)
+- [Material Design Icons](https://icon-sets.iconify.design/mdi/)
+- [Unicons](https://icon-sets.iconify.design/uil/)
 
 ---
 
