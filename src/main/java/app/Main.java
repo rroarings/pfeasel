@@ -33,12 +33,16 @@ import java.util.stream.Collectors;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.URL;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class Main extends JFrame {
+    private static final Logger logger = LoggerFactory.getLogger(Main.class);
 
     private JLabel statusLabel;
     private JLabel lastActionLabel; // New label for last action status
+    private JLabel debugLogLabel;
+    private boolean debugLogVisible = false;
     private DrawingPanel drawingPanel;
     private BufferedImage rsInterfaceImage;
 
@@ -84,9 +88,16 @@ public class Main extends JFrame {
         lastActionLabel = new JLabel("Last action: ");
         lastActionLabel.setBorder(BorderFactory.createEmptyBorder(0, 24, 0, 0));
 
+        // Add debug log label (restore to original far right, but keep invisible by default)
+        debugLogLabel = new JLabel("");
+        debugLogLabel.setHorizontalAlignment(SwingConstants.RIGHT);
+        debugLogLabel.setBorder(BorderFactory.createEmptyBorder(0, 24, 0, 12));
+        debugLogLabel.setVisible(false);
+
         JPanel statusPanel = new JPanel(new BorderLayout());
         statusPanel.add(statusLabel, BorderLayout.WEST);
         statusPanel.add(lastActionLabel, BorderLayout.CENTER);
+        statusPanel.add(debugLogLabel, BorderLayout.EAST);
         add(statusPanel, BorderLayout.SOUTH);
 
         // Set custom app icon
@@ -96,7 +107,7 @@ public class Main extends JFrame {
                 setIconImage(new ImageIcon(iconUrl).getImage());
             }
         } catch (Exception e) {
-            System.err.println("Failed to set app icon: " + e.getMessage());
+            logger.error("Failed to set app icon: " + e.getMessage());
         }
 
         pack();
@@ -110,6 +121,18 @@ public class Main extends JFrame {
 
     public void setLastActionStatus(String status) {
         if (lastActionLabel != null) lastActionLabel.setText("Last action: " + status);
+    }
+
+    public void setDebugLogVisible(boolean visible) {
+        this.debugLogVisible = visible;
+        debugLogLabel.setVisible(visible);
+    }
+    public void setDebugLogText(String text) {
+        if (this.debugLogVisible) debugLogLabel.setText(text);
+    }
+
+    public boolean isDebugLogVisible() {
+        return debugLogVisible;
     }
 
     // --- BEGIN: File and Image Handling Implementation ---
@@ -244,11 +267,11 @@ public class Main extends JFrame {
             if (imgUrl != null) {
                 rsInterfaceImage = ImageIO.read(imgUrl);
             } else {
-                System.err.println("Could not find RS interface image at /img/ui/aabc.png");
+                logger.error("Could not find RS interface image at /img/ui/aabc.png");
                 rsInterfaceImage = null;
             }
         } catch (IOException e) {
-            System.err.println("Failed to load RS interface image: " + e.getMessage());
+            logger.error("Failed to load RS interface image: " + e.getMessage());
             rsInterfaceImage = null;
         }
     }
@@ -291,10 +314,10 @@ public class Main extends JFrame {
             updateToolboxLayerList(); // Refresh layer list as undo might change it
             drawingPanel.repaint();
             setLastActionStatus("Undo: " + action.getActionName());
-            System.out.println("Performed UNDO");
+            logger.info("Performed UNDO");
         } else {
             setLastActionStatus("Undo: nothing to undo");
-            System.out.println("Undo stack is empty.");
+            logger.info("Undo stack is empty.");
         }
     }
 
@@ -307,10 +330,10 @@ public class Main extends JFrame {
             updateToolboxLayerList(); // Refresh layer list as redo might change it
             drawingPanel.repaint();
             setLastActionStatus("Redo: " + action.getActionName());
-            System.out.println("Performed REDO");
+            logger.info("Performed REDO");
         } else {
             setLastActionStatus("Redo: nothing to redo");
-            System.out.println("Redo stack is empty.");
+            logger.info("Redo stack is empty.");
         }
     }
 
@@ -332,9 +355,10 @@ public class Main extends JFrame {
     }
 
     public void internalAddElementToList(PaintElement element, int index) {
+        logger.debug("internalAddElementToList called with element={}, index={}", element, index);
         if (index < 0 || index > paintElements.size()) {
             paintElements.add(0, element);
-            System.err.println("internalAddElementToList: Invalid index " + index + ", adding to top (0).");
+            logger.error("internalAddElementToList: Invalid index {}, adding to top (0).", index);
         } else {
             paintElements.add(index, element);
         }
@@ -346,22 +370,25 @@ public class Main extends JFrame {
     }
 
     public void internalRemoveElementFromList(PaintElement element) {
+        logger.debug("internalRemoveElementFromList called with element={}", element);
         paintElements.remove(element);
         updateToolboxLayerList();
         drawingPanel.repaint();
     }
 
     public void internalRemoveElementFromList(int index) {
+        logger.debug("internalRemoveElementFromList called with index={}", index);
         if (index >= 0 && index < paintElements.size()) {
             paintElements.remove(index);
             updateToolboxLayerList();
             drawingPanel.repaint();
         } else {
-            System.err.println("internalRemoveElementFromList: Invalid index " + index);
+            logger.error("internalRemoveElementFromList: Invalid index {}", index);
         }
     }
 
     public void internalRestoreElementsList(List<PaintElement> elementsToRestore) {
+        logger.debug("internalRestoreElementsList called with {} elements", elementsToRestore != null ? elementsToRestore.size() : 0);
         paintElements.clear();
         paintElements.addAll(elementsToRestore);
         updateToolboxLayerList();
@@ -372,99 +399,94 @@ public class Main extends JFrame {
     }
 
     public void addPaintElement(PaintElement element, boolean addToUndoStack) {
+        logger.debug("addPaintElement called with element={}, addToUndoStack={}", element, addToUndoStack);
         if (addToUndoStack) {
             UndoableAction action = new AddElementAction(this, element, 0); // Pass index 0 as required by constructor
             internalAddElementToList(element, 0);
             addUndoableAction(action);
+            logger.info("Added element '{}'" + " at [" + element.getPosition().x + ", " + element.getPosition().y + "]" + " with undo support.", element.getDisplayName());
         } else {
             internalAddElementToList(element, 0);
+            logger.info("Added element '{}'" + " at [" + element.getPosition().getX() + ", " + element.getPosition().getY() + "]" + " without undo support.", element.getDisplayName());
         }
     }
 
     public void addPaintElement(PaintElement element) {
+        logger.debug("addPaintElement(element) called");
         addPaintElement(element, true);
     }
 
     public void deletePaintElement(int listIndexInToolbox) {
+        logger.debug("deletePaintElement called with index={}", listIndexInToolbox);
         if (listIndexInToolbox >= 0 && listIndexInToolbox < paintElements.size()) {
             PaintElement removedElement = paintElements.get(listIndexInToolbox);
             UndoableAction action = new DeleteElementAction(this, removedElement, listIndexInToolbox);
             internalRemoveElementFromList(listIndexInToolbox);
             addUndoableAction(action);
-            System.out.println("Main: Deleted element '" + removedElement.getDisplayName() + "' at paintElements index " + listIndexInToolbox);
+            logger.info("Deleted element '{}' at index {}.", removedElement.getDisplayName(), listIndexInToolbox);
             setLastActionStatus("Deleted '" + removedElement.getDisplayName() + "'");
         } else {
-            System.err.println("Main.deletePaintElement: Invalid index " + listIndexInToolbox);
+            logger.error("deletePaintElement: Invalid index {}", listIndexInToolbox);
         }
     }
 
     public void duplicatePaintElement(int selectedIndexInListModel) {
+        logger.debug("duplicatePaintElement called with selectedIndexInListModel={}", selectedIndexInListModel);
         if (toolboxFrame == null || selectedIndexInListModel < 0 || selectedIndexInListModel >= toolboxFrame.getLayersListModel().getSize()) {
-            System.err.println("Error duplicating element: Invalid selected index " + selectedIndexInListModel);
+            logger.error("Error duplicating element: Invalid selected index {}", selectedIndexInListModel);
             JOptionPane.showMessageDialog(this, "Please select a layer to duplicate.", "No Layer Selected", JOptionPane.WARNING_MESSAGE);
             return;
         }
-
         int actualPaintElementIndex = paintElements.size() - 1 - selectedIndexInListModel;
-
         if (actualPaintElementIndex < 0 || actualPaintElementIndex >= paintElements.size()) {
-            System.err.println("Error duplicating element: Calculated paintElements index " + actualPaintElementIndex + " is out of bounds. List size: " + paintElements.size() + ", JList index: " + selectedIndexInListModel);
+            logger.error("Error duplicating element: Calculated paintElements index {} is out of bounds. List size: {}, JList index: {}", actualPaintElementIndex, paintElements.size(), selectedIndexInListModel);
             JOptionPane.showMessageDialog(this, "Error finding the selected layer. Please try again.", "Duplication Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
-
         PaintElement originalElement = paintElements.get(actualPaintElementIndex);
         if (originalElement == null) {
-            System.err.println("Error duplicating element: Original element at index " + actualPaintElementIndex + " is null.");
+            logger.error("Error duplicating element: Original element at index {} is null.", actualPaintElementIndex);
             JOptionPane.showMessageDialog(this, "Cannot duplicate a null element.", "Duplication Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
-
         PaintElement duplicatedElement = originalElement.duplicate();
-
         if (duplicatedElement == null) {
-            System.err.println("Error duplicating element: duplicate() method returned null for " + originalElement.getName());
+            logger.error("Error duplicating element: duplicate() method returned null for {}", originalElement.getName());
             JOptionPane.showMessageDialog(this, "Failed to duplicate the element. Image could not be reloaded or other error.", "Duplication Failed", JOptionPane.ERROR_MESSAGE);
             return;
         }
-
         Point originalPosition = duplicatedElement.getPosition();
         int offsetX = 10;
         int offsetY = 10;
         duplicatedElement.setPosition(originalPosition.x + offsetX, originalPosition.y + offsetY);
-
         String uniqueDisplayName = generateUniqueDisplayName(duplicatedElement.getName());
         duplicatedElement.setDisplayName(uniqueDisplayName);
-
         paintElements.add(0, duplicatedElement);
-
         if (toolboxFrame != null) {
             toolboxFrame.addLayerToList(uniqueDisplayName, 0);
             toolboxFrame.selectLayerInList(0);
         }
-
         repaintDrawingPanel();
         setLastActionStatus("Duplicated '" + uniqueDisplayName + "'");
-        System.out.println("Element '" + originalElement.getDisplayName() + "' duplicated as '" + uniqueDisplayName + "' at offset (" + offsetX + "," + offsetY + ")");
+        logger.info("Element '{}' duplicated as '{}' at offset ({}, {})", originalElement.getDisplayName(), uniqueDisplayName, offsetX, offsetY);
     }
 
     public void updatePaintElementDisplayName(int listIndexInToolbox, String newDisplayName) {
+        logger.debug("updatePaintElementDisplayName called with index={}, newDisplayName={}", listIndexInToolbox, newDisplayName);
         if (listIndexInToolbox >= 0 && listIndexInToolbox < paintElements.size()) {
             PaintElement element = paintElements.get(listIndexInToolbox);
             String oldDisplayName = element.getDisplayName();
-
             if (!oldDisplayName.equals(newDisplayName)) {
                 UndoableAction action = new ChangeDisplayNameAction(this, element, oldDisplayName, newDisplayName, listIndexInToolbox);
                 element.setDisplayName(newDisplayName);
                 addUndoableAction(action);
-
                 updateToolboxLayerList();
                 drawingPanel.repaint();
-                System.out.println("Main: Updated display name for element at paintElements index " + listIndexInToolbox + " from '" + oldDisplayName + "' to '" + newDisplayName + "'");
+                logger.info("Updated display name for element at index {} from '{}' to '{}'", listIndexInToolbox, oldDisplayName, newDisplayName);
                 setLastActionStatus("Renamed to '" + newDisplayName + "'");
             }
         } else {
-            System.err.println("Main.updatePaintElementDisplayName: Invalid index: " + listIndexInToolbox);
+            logger.error("updatePaintElementDisplayName: Invalid index {}", listIndexInToolbox);
         }
     }
 
@@ -490,10 +512,10 @@ public class Main extends JFrame {
 
             updateToolboxLayerList();
             drawingPanel.repaint();
-            System.out.println("Main: Moved element '" + element.getDisplayName() + "' from paintElements index " + listIndexInToolbox + " to " + (listIndexInToolbox - 1));
+            logger.info("Main: Moved element '" + element.getDisplayName() + "' from paintElements index " + listIndexInToolbox + " to " + (listIndexInToolbox - 1));
             setLastActionStatus("Reordered layer: '" + element.getDisplayName() + "'");
         } else {
-            System.err.println("Main.moveLayerUp: Invalid index: " + listIndexInToolbox);
+            logger.error("Main.moveLayerUp: Invalid index: " + listIndexInToolbox);
         }
     }
 
@@ -509,10 +531,10 @@ public class Main extends JFrame {
 
             updateToolboxLayerList();
             drawingPanel.repaint();
-            System.out.println("Main: Moved element '" + element.getDisplayName() + "' from paintElements index " + listIndexInToolbox + " to " + (listIndexInToolbox + 1));
+            logger.info("Main: Moved element '" + element.getDisplayName() + "' from paintElements index " + listIndexInToolbox + " to " + (listIndexInToolbox + 1));
             setLastActionStatus("Reordered layer: '" + element.getDisplayName() + "'");
         } else {
-            System.err.println("Main.moveLayerDown: Invalid index: " + listIndexInToolbox);
+            logger.error("Main.moveLayerDown: Invalid index: " + listIndexInToolbox);
         }
     }
 
@@ -526,10 +548,10 @@ public class Main extends JFrame {
 
             updateToolboxLayerList();
             drawingPanel.repaint();
-            System.out.println("Main: Cleared all paint elements.");
+            logger.info("Main: Cleared all paint elements.");
             setLastActionStatus("Cleared all paint elements");
         } else {
-            System.out.println("Main: No paint elements to clear.");
+            logger.info("Main: No paint elements to clear.");
         }
     }
 
@@ -543,7 +565,7 @@ public class Main extends JFrame {
     public void setDrawRSInterface(boolean visible) {
         this.rsInterfaceVisible = visible;
         repaintDrawingPanel();
-        System.out.println("Draw RS Interface set to: " + visible);
+        logger.info("Draw RS Interface set to: " + visible);
     }
 
     public boolean isDrawRSInterfaceVisible() {
@@ -556,7 +578,7 @@ public class Main extends JFrame {
         if (newBgColor != null) {
             drawingPanel.setBackground(newBgColor);
             repaintDrawingPanel();
-            System.out.println("Background color changed to: " + newBgColor);
+            logger.info("Background color changed to: " + newBgColor);
         }
     }
 
@@ -568,7 +590,7 @@ public class Main extends JFrame {
         if (gridManager != null) {
             gridManager.setGridVisible(visible);
             repaintDrawingPanel();
-            System.out.println("Grid visibility set to: " + visible);
+            logger.info("Grid visibility set to: " + visible);
         }
     }
 
@@ -582,7 +604,7 @@ public class Main extends JFrame {
         if (gridManager != null) {
             gridManager.resetGridToDefaults();
             repaintDrawingPanel();
-            System.out.println("Grid reset to defaults.");
+            logger.info("Grid reset to defaults.");
         }
     }
 
@@ -592,7 +614,7 @@ public class Main extends JFrame {
 
     public void setSnapToGrid(boolean active) {
         this.snapToGridActive = active;
-        System.out.println("Snap to Grid set to: " + active);
+        logger.info("Snap to Grid set to: " + active);
     }
 
     public boolean isAntiAliasingActive() {
@@ -602,7 +624,7 @@ public class Main extends JFrame {
     public void setAntiAliasing(boolean active) {
         this.antiAliasingActive = active;
         repaintDrawingPanel();
-        System.out.println("Anti-aliasing set to: " + active);
+        logger.info("Anti-aliasing set to: " + active);
     }
 
     private String generateUniqueDisplayName(String baseName) {
@@ -731,7 +753,11 @@ public class Main extends JFrame {
                                 selectedElementForMove = element;
                                 Point elementPos = selectedElementForMove.getPosition();
                                 dragOffset = new Point(currentPoint.x - elementPos.x, currentPoint.y - elementPos.y);
-                                // Do NOT move the element to the top of the list or change layer order
+                                // Select the corresponding layer in the layers list
+                                if (toolboxFrame != null) {
+                                    int layerIndex = paintElements.size() - 1 - i;
+                                    toolboxFrame.selectLayerInList(layerIndex);
+                                }
                                 repaint();
                                 break;
                             }
@@ -878,7 +904,7 @@ public class Main extends JFrame {
 
                 @Override
                 public void mouseClicked(MouseEvent e) {
-                    System.out.println("[DEBUG] mouseClicked entered. Tool: " + ((toolboxFrame != null) ? toolboxFrame.getSelectedTool() : "N/A") + ", Click at: " + e.getPoint());
+                    logger.info("[DEBUG] mouseClicked entered. Tool: " + ((toolboxFrame != null) ? toolboxFrame.getSelectedTool() : "N/A") + ", Click at: " + e.getPoint());
                     ToolboxFrame.ToolType selectedTool = (toolboxFrame != null) ? toolboxFrame.getSelectedTool() : null;
                     Point clickedPoint = e.getPoint();
 
@@ -888,10 +914,10 @@ public class Main extends JFrame {
 
                     if (isDrawingPolygon && selectedTool != ToolboxFrame.ToolType.POLYGON) {
                         if (currentPolygonPoints.size() >= 3) {
-                            System.out.println("Polygon finalized due to tool change.");
+                            logger.info("Polygon finalized due to tool change.");
                             finalizePolygon();
                         } else {
-                            System.out.println("Polygon drawing cancelled due to tool change (not enough points).");
+                            logger.info("Polygon drawing cancelled due to tool change (not enough points).");
                             isDrawingPolygon = false;
                             currentPolygonPoints.clear();
                             repaint();
@@ -926,17 +952,17 @@ public class Main extends JFrame {
                             Point firstPoint = currentPolygonPoints.get(0);
                             final int CLOSING_TOLERANCE = 8;
                             if (clickedPoint.distance(firstPoint) <= CLOSING_TOLERANCE) {
-                                System.out.println("Polygon closed by clicking first point.");
+                                logger.info("Polygon closed by clicking first point.");
                                 finalizePolygon();
                                 return;
                             }
                         }
 
                         currentPolygonPoints.add(clickedPoint);
-                        System.out.println("Added polygon point: " + clickedPoint + ", total points: " + currentPolygonPoints.size());
+                        logger.info("Added polygon point: " + clickedPoint + ", total points: " + currentPolygonPoints.size());
                         
                         if (e.getClickCount() == 2 && currentPolygonPoints.size() >= 3) {
-                            System.out.println("Polygon finalized by double-click.");
+                            logger.info("Polygon finalized by double-click.");
                             finalizePolygon();
                         } else {
                             repaint();
@@ -961,7 +987,7 @@ public class Main extends JFrame {
                 newPolygon.setDisplayName(uniqueDisplayName);
                 addPaintElement(newPolygon);
                 setLastActionStatus("Drew polygon '" + uniqueDisplayName + "' with " + currentPolygonPoints.size() + " points");
-                System.out.println("Polygon finalized with " + currentPolygonPoints.size() + " points. Name: " + uniqueDisplayName);
+                logger.info("Polygon finalized with " + currentPolygonPoints.size() + " points. Name: " + uniqueDisplayName);
             }
             currentPolygonPoints.clear();
             isDrawingPolygon = false;
@@ -1115,12 +1141,16 @@ public class Main extends JFrame {
             ToolboxFrame toolbox = new ToolboxFrame(frame);
             frame.setToolboxFrame(toolbox);
 
+            // Show main window first
             frame.setVisible(true);
 
+            // Move toolbox to the left of the main window
             Point mainWindowLocation = frame.getLocation();
-            int mainWindowWidth = frame.getWidth();
+            int toolboxWidth = toolbox.getWidth();
+            int mainWindowY = mainWindowLocation.y;
+            int mainWindowX = mainWindowLocation.x;
+            toolbox.setLocation(mainWindowX - toolboxWidth, mainWindowY);
             toolbox.setVisible(true);
-            toolbox.setLocation(mainWindowLocation.x + mainWindowWidth, mainWindowLocation.y);
         });
     }
 
@@ -1140,7 +1170,7 @@ public class Main extends JFrame {
     // For ReorderLayerAction
     public void internalMoveElementInList(PaintElement element, int fromIndex, int toIndex) {
         if (element == null || fromIndex < 0 || fromIndex >= paintElements.size() || toIndex < 0 || toIndex > paintElements.size()) {
-            System.err.println("internalMoveElementInList: Invalid arguments");
+            logger.error("internalMoveElementInList: Invalid arguments");
             return;
         }
         paintElements.remove(fromIndex);

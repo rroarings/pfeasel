@@ -4,13 +4,16 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
-import javax.swing.ListSelectionModel;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.awt.*;
 import java.util.HashMap;
 import java.util.Map;
 
 public class ToolboxFrame extends JFrame {
+    private static final Logger logger = LoggerFactory.getLogger(ToolboxFrame.class);
     // Define an enum for the tools
     public enum ToolType {
         SELECT, TEXT, RECTANGLE, ROUND_RECTANGLE, CIRCLE, LINE, POLYGON, IMAGE_URL, IMAGE_LOCAL, MOVE // Added SELECT
@@ -122,13 +125,13 @@ public class ToolboxFrame extends JFrame {
         JCheckBox fillCheck = new JCheckBox("Fill", isFillEnabled);
         fillCheck.addActionListener(e -> {
             isFillEnabled = fillCheck.isSelected();
-            System.out.println("Fill enabled: " + isFillEnabled);
+            logger.info("Fill enabled: " + isFillEnabled);
         });
 
         JCheckBox strokeCheck = new JCheckBox("Stroke", isStrokeEnabled);
         strokeCheck.addActionListener(e -> {
             isStrokeEnabled = strokeCheck.isSelected();
-            System.out.println("Stroke enabled: " + isStrokeEnabled);
+            logger.info("Stroke enabled: " + isStrokeEnabled);
         });
 
         JButton fillColorBtn = new JButton();
@@ -140,7 +143,7 @@ public class ToolboxFrame extends JFrame {
             if (newColor != null) {
                 fillColor = newColor;
                 fillColorBtn.setBackground(fillColor);
-                System.out.println("Fill color set to: " + fillColor);
+                logger.info("Fill color set to: " + fillColor);
             }
         });
 
@@ -153,14 +156,14 @@ public class ToolboxFrame extends JFrame {
             if (newColor != null) {
                 strokeColor = newColor;
                 strokeColorBtn.setBackground(strokeColor);
-                System.out.println("Stroke color set to: " + strokeColor);
+                logger.info("Stroke color set to: " + strokeColor);
             }
         });
 
         JSpinner strokeWidthSpinner = new JSpinner(new SpinnerNumberModel(currentStrokeWidth, 1, 20, 1));
         strokeWidthSpinner.addChangeListener(e -> {
             currentStrokeWidth = (int) strokeWidthSpinner.getValue();
-            System.out.println("Stroke width: " + currentStrokeWidth);
+            logger.info("Stroke width: " + currentStrokeWidth);
         });
 
         fillStrokePanel.add(fillColorBtn);
@@ -181,8 +184,8 @@ public class ToolboxFrame extends JFrame {
             if (dialog.isConfirmed()) {
                 arcWidth = dialog.getNewArcWidth();
                 arcHeight = dialog.getNewArcHeight();
-                System.out.println("Arc Width updated to: " + arcWidth);
-                System.out.println("Arc Height updated to: " + arcHeight);
+                logger.info("Arc Width updated to: " + arcWidth);
+                logger.info("Arc Height updated to: " + arcHeight);
                 if (mainFrame != null) mainFrame.repaintDrawingPanel(); // Basic repaint trigger
             }
         });
@@ -210,7 +213,7 @@ public class ToolboxFrame extends JFrame {
 
             private void updateText() {
                 currentText = textFieldComponent.getText();
-                System.out.println("Current text: " + currentText);
+                logger.info("Current text: " + currentText);
             }
         });
         textPanel.add(textFieldComponent);
@@ -227,7 +230,7 @@ public class ToolboxFrame extends JFrame {
         fontCombo.addActionListener(e -> {
             selectedFontFamily = (String) fontCombo.getSelectedItem();
             updateCurrentFont();
-            System.out.println("Font family: " + selectedFontFamily);
+            logger.info("Font family: " + selectedFontFamily);
         });
         fontPanel.add(fontCombo);
 
@@ -236,7 +239,7 @@ public class ToolboxFrame extends JFrame {
         boldBtn.addActionListener(e -> {
             isBold = boldBtn.isSelected();
             updateCurrentFont();
-            System.out.println("Bold: " + isBold);
+            logger.info("Bold: " + isBold);
         });
 
         JToggleButton italicBtn = new JToggleButton("I");
@@ -244,14 +247,14 @@ public class ToolboxFrame extends JFrame {
         italicBtn.addActionListener(e -> {
             isItalic = italicBtn.isSelected();
             updateCurrentFont();
-            System.out.println("Italic: " + isItalic);
+            logger.info("Italic: " + isItalic);
         });
 
         JToggleButton underlineBtn = new JToggleButton("U");
         underlineBtn.setToolTipText("Underline");
         underlineBtn.addActionListener(e -> {
             isUnderline = underlineBtn.isSelected();
-            System.out.println("Underline: " + isUnderline);
+            logger.info("Underline: " + isUnderline);
         });
 
         fontPanel.add(boldBtn);
@@ -262,7 +265,7 @@ public class ToolboxFrame extends JFrame {
         fontSizeSpinner.addChangeListener(e -> {
             selectedFontSize = (int) fontSizeSpinner.getValue();
             updateCurrentFont();
-            System.out.println("Font size: " + selectedFontSize);
+            logger.info("Font size: " + selectedFontSize);
         });
         fontPanel.add(fontSizeSpinner);
         controlsPanel.add(fontPanel, gbc);
@@ -370,7 +373,7 @@ public class ToolboxFrame extends JFrame {
                             if (mainFrame != null) {
                                 mainFrame.updatePaintElementDisplayName(selectedIndex, newName);
                             }
-                            System.out.println("Edited layer: '" + currentName + "' to '" + newName + "' at JList index " + selectedIndex);
+                            logger.info("Edited layer: '" + currentName + "' to '" + newName + "' at JList index " + selectedIndex);
                         }
                     } else if (newName.isEmpty()) {
                         JOptionPane.showMessageDialog(ToolboxFrame.this, "Layer name cannot be empty.", "Invalid Name", JOptionPane.ERROR_MESSAGE);
@@ -393,7 +396,7 @@ public class ToolboxFrame extends JFrame {
                     // Notify Main to remove the corresponding PaintElement
                     // Main will then update the layersModel via updateToolboxLayerList
                     mainFrame.deletePaintElement(selectedIndex);
-                    System.out.println("Delete request for layer: " + layerName + " at JList index " + selectedIndex);
+                    logger.info("Delete request for layer: " + layerName + " at JList index " + selectedIndex);
                 }
             }
         });
@@ -406,7 +409,7 @@ public class ToolboxFrame extends JFrame {
                 layersModel.setElementAt(temp, selectedIndex - 1);
                 layersList.setSelectedIndex(selectedIndex - 1);
                 mainFrame.moveLayerUp(selectedIndex); // Notify Main to reorder PaintElement
-                System.out.println("Moved layer up: " + temp + " from index " + selectedIndex);
+                logger.info("Moved layer up: " + temp + " from index " + selectedIndex);
             }
         });
 
@@ -418,7 +421,7 @@ public class ToolboxFrame extends JFrame {
                 layersModel.setElementAt(temp, selectedIndex + 1);
                 layersList.setSelectedIndex(selectedIndex + 1);
                 mainFrame.moveLayerDown(selectedIndex); // Notify Main to reorder PaintElement
-                System.out.println("Moved layer down: " + temp + " from index " + selectedIndex);
+                logger.info("Moved layer down: " + temp + " from index " + selectedIndex);
             }
         });
 
@@ -444,7 +447,7 @@ public class ToolboxFrame extends JFrame {
         JCheckBox shadowEnabledCheck = new JCheckBox("Enabled", isShadowEnabled);
         shadowEnabledCheck.addActionListener(e -> {
             isShadowEnabled = shadowEnabledCheck.isSelected();
-            System.out.println("Shadow enabled: " + isShadowEnabled);
+            logger.info("Shadow enabled: " + isShadowEnabled);
             if (mainFrame != null) mainFrame.repaintDrawingPanel();
         });
         shadowRow1Panel.add(shadowEnabledCheck);
@@ -459,7 +462,7 @@ public class ToolboxFrame extends JFrame {
             if (newColor != null) {
                 shadowColor = newColor;
                 shadowColorBtn.setBackground(shadowColor);
-                System.out.println("Shadow color set to: " + shadowColor);
+                logger.info("Shadow color set to: " + shadowColor);
             }
         });
         shadowRow1Panel.add(shadowColorBtn);
@@ -472,7 +475,7 @@ public class ToolboxFrame extends JFrame {
         JSpinner shadowXSpinner = new JSpinner(new SpinnerNumberModel(shadowXOffset, -20, 20, 1));
         shadowXSpinner.addChangeListener(e -> {
             shadowXOffset = (int) shadowXSpinner.getValue();
-            System.out.println("Shadow X Offset: " + shadowXOffset);
+            logger.info("Shadow X Offset: " + shadowXOffset);
         });
         shadowRow2Panel.add(shadowXSpinner);
 
@@ -480,7 +483,7 @@ public class ToolboxFrame extends JFrame {
         JSpinner shadowYSpinner = new JSpinner(new SpinnerNumberModel(shadowYOffset, -20, 20, 1));
         shadowYSpinner.addChangeListener(e -> {
             shadowYOffset = (int) shadowYSpinner.getValue();
-            System.out.println("Shadow Y Offset: " + shadowYOffset);
+            logger.info("Shadow Y Offset: " + shadowYOffset);
         });
         shadowRow2Panel.add(shadowYSpinner);
         shadowPanel.add(shadowRow2Panel); // Add second row to main shadow panel
@@ -642,7 +645,7 @@ public class ToolboxFrame extends JFrame {
         snapToGridMenuItem = new JCheckBoxMenuItem("Snap to Grid", mainFrame != null && mainFrame.isSnapToGridActive());
         snapToGridMenuItem.addActionListener(e -> {
             if (mainFrame != null) mainFrame.setSnapToGrid(snapToGridMenuItem.isSelected());
-            System.out.println("Snap to Grid selected: " + snapToGridMenuItem.isSelected());
+            logger.info("Snap to Grid selected: " + snapToGridMenuItem.isSelected());
         });
         viewMenu.add(snapToGridMenuItem);
         viewMenu.addSeparator();
@@ -666,6 +669,14 @@ public class ToolboxFrame extends JFrame {
         antiAliasingMenu.add(antiAliasingOnMenuItem);
         viewMenu.add(antiAliasingMenu);
 
+        // Add Show Debug Logs option at the end
+        JCheckBoxMenuItem showDebugLogsMenuItem = new JCheckBoxMenuItem("Show Debug Logs", false);
+        showDebugLogsMenuItem.addActionListener(e -> {
+            if (mainFrame != null) mainFrame.setDebugLogVisible(showDebugLogsMenuItem.isSelected());
+        });
+        viewMenu.addSeparator();
+        viewMenu.add(showDebugLogsMenuItem);
+
         menuBar.add(viewMenu);
 
         
@@ -680,7 +691,7 @@ public class ToolboxFrame extends JFrame {
             ImageIcon icon = new ImageIcon(getClass().getResource(iconPath));
             button.setIcon(icon);
         } catch (NullPointerException e) {
-            System.err.println("Icon not found: " + iconPath);
+            logger.info("Icon not found: " + iconPath);
             button.setText(tooltip.substring(0, Math.min(tooltip.length(), 3))); // Fallback text
         }
         button.addActionListener(e -> setSelectedTool(toolType));
@@ -697,7 +708,7 @@ public class ToolboxFrame extends JFrame {
 
     private void setSelectedTool(ToolType toolType) {
         this.selectedTool = toolType;
-        System.out.println("Selected tool: " + toolType);
+        logger.info("Selected tool: " + toolType);
 
         // Update button appearances using JToggleButton's selected state
         for (Map.Entry<ToolType, JToggleButton> entry : toolButtons.entrySet()) { // Changed JButton to JToggleButton
@@ -782,13 +793,9 @@ public class ToolboxFrame extends JFrame {
 
     // Method to select a layer in the list by index
     public void selectLayerInList(int index) {
-        if (index >= 0 && index < layersModel.getSize()) {
+        if (layersList != null && index >= 0 && index < layersModel.size()) {
             layersList.setSelectedIndex(index);
-            layersList.ensureIndexIsVisible(index); // Ensure the selected item is visible
-        } else if (index == -1) {
-            layersList.clearSelection();
-        } else {
-            System.err.println("ToolboxFrame.selectLayerInList: Invalid index " + index);
+            layersList.ensureIndexIsVisible(index);
         }
     }
 
@@ -820,7 +827,7 @@ public class ToolboxFrame extends JFrame {
             layersModel.add(index, layerName);
         } else {
             layersModel.add(0, layerName); // Default to adding at the top if index is out of bounds
-            System.err.println("addLayerToList: index " + index + " out of bounds (" + layersModel.getSize() + "), adding to top (0).");
+            logger.info("addLayerToList: index " + index + " out of bounds (" + layersModel.getSize() + "), adding to top (0).");
         }
     }
 
@@ -835,25 +842,25 @@ public class ToolboxFrame extends JFrame {
             layersModel.add(0, layerName);
             // If you have a JList component named layersList that displays this model:
             // layersList.setSelectedIndex(0); // Uncomment and adapt if you have a direct reference to layersList
-            System.out.println("Moved layer in ToolboxFrame: '" + layerName + "' from index " + oldIndex + " to 0");
+            logger.info("Moved layer in ToolboxFrame: '" + layerName + "' from index " + oldIndex + " to 0");
         } else if (oldIndex == 0) {
             // Already at the top, do nothing or log
             if (!layersModel.isEmpty()) {
-                System.out.println("Layer in ToolboxFrame is already at the top: " + layersModel.getElementAt(0));
+                logger.info("Layer in ToolboxFrame is already at the top: " + layersModel.getElementAt(0));
             } else {
-                System.err.println("moveLayerToTopInList: Attempted to access element at index 0, but layersModel is empty.");
+                logger.info("moveLayerToTopInList: Attempted to access element at index 0, but layersModel is empty.");
             }
         } else {
-            System.err.println("moveLayerToTopInList: Invalid oldIndex " + oldIndex + " for layersModel size " + layersModel.getSize());
+            logger.info("moveLayerToTopInList: Invalid oldIndex " + oldIndex + " for layersModel size " + layersModel.getSize());
         }
     }
 
     public void updateLayerName(int index, String newName) {
         if (index >= 0 && index < layersModel.getSize()) {
             layersModel.setElementAt(newName, index);
-            System.out.println("Updated layer name at index " + index + " to: " + newName);
+            logger.info("Updated layer name at index " + index + " to: " + newName);
         } else {
-            System.err.println("updateLayerName: Invalid index " + index + " for layersModel size " + layersModel.getSize());
+            logger.info("updateLayerName: Invalid index " + index + " for layersModel size " + layersModel.getSize());
         }
     }
 

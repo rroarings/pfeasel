@@ -5,6 +5,9 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import paintcomponents.PaintElement;
 import paintcomponents.RectangleElement;
 import paintcomponents.RoundRectangleElement;
@@ -17,6 +20,7 @@ import paintcomponents.ImageElement;
 import java.util.HashMap;
 
 public class CodeGenerator {
+    private static final Logger logger = LoggerFactory.getLogger(CodeGenerator.class);
     private final List<String> imports = new ArrayList<>();
     private final List<String> colorDeclarations = new ArrayList<>();
     private final List<String> strokeDeclarations = new ArrayList<>();
@@ -192,7 +196,7 @@ public class CodeGenerator {
                 code.append(String.format("        g.drawRect(%d, %d, %d, %d);\n", x, y, width, height));
             }
         } catch (Exception e) {
-            System.err.println("Error accessing RectangleElement fields: " + e.getMessage());
+            logger.error("Error accessing RectangleElement fields: " + e.getMessage());
         }
     }
 
@@ -244,7 +248,7 @@ public class CodeGenerator {
                 code.append(String.format("        g.drawRoundRect(%d, %d, %d, %d, %d, %d);\n", x, y, width, height, arcWidth, arcHeight));
             }
         } catch (Exception e) {
-            System.err.println("Error accessing RoundRectangleElement fields: " + e.getMessage());
+            logger.error("Error accessing RoundRectangleElement fields: " + e.getMessage());
         }
     }
 
@@ -290,7 +294,7 @@ public class CodeGenerator {
                 code.append(String.format("        g.drawOval(%d, %d, %d, %d);\n", x, y, width, height));
             }
         } catch (Exception e) {
-            System.err.println("Error accessing CircleElement fields: " + e.getMessage());
+            logger.error("Error accessing CircleElement fields: " + e.getMessage());
         }
     }
 
@@ -322,7 +326,7 @@ public class CodeGenerator {
                 code.append(String.format("        g.drawLine(%d, %d, %d, %d);\n", x1, y1, x2, y2));
             }
         } catch (Exception e) {
-            System.err.println("Error accessing LineElement fields: " + e.getMessage());
+            logger.error("Error accessing LineElement fields: " + e.getMessage());
         }
     }
 
@@ -375,7 +379,7 @@ public class CodeGenerator {
                 }
             }
         } catch (Exception e) {
-            System.err.println("Error accessing PolygonElement fields: " + e.getMessage());
+            logger.error("Error accessing PolygonElement fields: " + e.getMessage());
         }
     }
 
@@ -405,7 +409,7 @@ public class CodeGenerator {
                         textContent.replace("\"", "\\\""), x, y));
             }
         } catch (Exception e) {
-            System.err.println("Error accessing TextElement fields: " + e.getMessage());
+            logger.error("Error accessing TextElement fields: " + e.getMessage());
         }
     }
 
