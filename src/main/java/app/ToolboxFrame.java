@@ -875,16 +875,18 @@ public class ToolboxFrame extends JFrame {
     // Method to update the entire layers list from a list of names
     public void updateLayersList(java.util.List<String> layerNames) {
         layersModel.clear();
-        for (String name : layerNames) {
-            layersModel.addElement(name);
+        // Add in reverse order so topmost (last in list) is at index 0 (top of JList)
+        for (int i = layerNames.size() - 1; i >= 0; i--) {
+            layersModel.addElement(layerNames.get(i));
         }
     }
 
-    // Method to select a layer in the list by index
-    public void selectLayerInList(int index) {
-        if (layersList != null && index >= 0 && index < layersModel.size()) {
-            layersList.setSelectedIndex(index);
-            layersList.ensureIndexIsVisible(index);
+    // Method to select a layer in the list by index (from paintElements list)
+    public void selectLayerInList(int paintElementIndex) {
+        int jListIndex = layersModel.size() - 1 - paintElementIndex;
+        if (layersList != null && jListIndex >= 0 && jListIndex < layersModel.size()) {
+            layersList.setSelectedIndex(jListIndex);
+            layersList.ensureIndexIsVisible(jListIndex);
         }
     }
 
