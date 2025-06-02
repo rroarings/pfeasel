@@ -1136,6 +1136,8 @@ public class Main extends JFrame {
     }
 
     public static void main(String[] args) {
+        // Set FlatLaf theme before any Swing UI is created
+        ToolboxFrame.setupInitialTheme();
         SwingUtilities.invokeLater(() -> {
             Main frame = new Main();
             ToolboxFrame toolbox = new ToolboxFrame(frame);
