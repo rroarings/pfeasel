@@ -41,7 +41,7 @@ PFeasel Paint Creator is a Java Swing-based 2D vector graphics application. It a
 
 1. **Clone the Repository**:
     ```bash
-    git clone <repository-url>
+    git clone https://github.com/rroarings/pfeasel.git
     cd pfeasel-paint-creator
     ```
 2. **Open in IDE**:
