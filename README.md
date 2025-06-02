@@ -36,7 +36,7 @@ PFeasel Paint Creator is a Java Swing-based 2D vector graphics application. It a
 
 ### Prerequisites
 * Java Development Kit (JDK) 11 or newer.
-* [Maven](https://maven.apache.org/) (for building and running)
+* [Maven 3.3.0](https://maven.apache.org/) (for building and running)
 
 ### Steps
 
@@ -60,6 +60,7 @@ PFeasel Paint Creator is a Java Swing-based 2D vector graphics application. It a
 
 * Select drawing tools from the toolbox window (opens to the right of the main window).
 * Adjust element properties (colors, stroke, font, shadow, etc.) using the controls in the toolbox.
+* Line color is adjusted from the <strong>Stroke</strong> color option
 * Draw elements directly on the main canvas.
 * Manage drawing elements as layers using the "Layers" list in the toolbox.
 * Use the "File" menu for creating new drawings, opening existing ones, or saving your work.
