@@ -568,7 +568,19 @@ public class ToolboxFrame extends JFrame {
         fileMenu.addSeparator();
         fileMenu.add(generateCodeMenuItem); // Add to menu
         fileMenu.addSeparator();
-        fileMenu.add(new JMenuItem("Exit"));
+        JMenuItem exitItem = new JMenuItem("Exit");
+        exitItem.addActionListener(e -> {
+            int confirm = JOptionPane.showConfirmDialog(
+                ToolboxFrame.this,
+                "Are you sure you want to quit?",
+                "Exit Confirmation",
+                JOptionPane.YES_NO_OPTION
+            );
+            if (confirm == JOptionPane.YES_OPTION) {
+                System.exit(0);
+            }
+        });
+        fileMenu.add(exitItem);
         menuBar.add(fileMenu);
 
         // Edit Menu
@@ -669,18 +681,7 @@ public class ToolboxFrame extends JFrame {
         antiAliasingMenu.add(antiAliasingOnMenuItem);
         viewMenu.add(antiAliasingMenu);
 
-        // Add Show Debug Logs option at the end
-        JCheckBoxMenuItem showDebugLogsMenuItem = new JCheckBoxMenuItem("Show Debug Logs", false);
-        showDebugLogsMenuItem.addActionListener(e -> {
-            if (mainFrame != null) mainFrame.setDebugLogVisible(showDebugLogsMenuItem.isSelected());
-        });
-        viewMenu.addSeparator();
-        viewMenu.add(showDebugLogsMenuItem);
-
         menuBar.add(viewMenu);
-
-        
-
         setJMenuBar(menuBar);
     }
 
