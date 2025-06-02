@@ -102,7 +102,7 @@ public class Main extends JFrame {
 
         // Set custom app icon
         try {
-            java.net.URL iconUrl = getClass().getResource("/img/ui/game-icons--easel.png");
+            java.net.URL iconUrl = getClass().getResource("/img/ui/easel-logo.jpeg");
             if (iconUrl != null) {
                 setIconImage(new ImageIcon(iconUrl).getImage());
             }
@@ -263,11 +263,11 @@ public class Main extends JFrame {
     private void loadRSInterfaceImage() {
         try {
             // Load from classpath (works in JAR and IDE)
-            URL imgUrl = getClass().getResource("/img/ui/aabc.png");
+            URL imgUrl = getClass().getResource("/img/ui/rs-interface.png");
             if (imgUrl != null) {
                 rsInterfaceImage = ImageIO.read(imgUrl);
             } else {
-                logger.error("Could not find RS interface image at /img/ui/aabc.png");
+                logger.error("Could not find RS interface image at /img/ui/rs-interface.png");
                 rsInterfaceImage = null;
             }
         } catch (IOException e) {
