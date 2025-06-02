@@ -1,7 +1,7 @@
-# PFeasel Paint Creator
+# PF Easel
 
 ## Description
-PFeasel Paint Creator is a Java Swing-based 2D vector graphics application. It allows users to draw various shapes, add text and images, manipulate these elements on a canvas, and manage them through a layer system.
+PF Easel is a Java Swing-based 2D vector graphics application. It allows users to draw various shapes, add text and images, manipulate these elements on a canvas, and manage them through a layer system.
 
 ## Features
 * **Drawing Tools**: Rectangle, Rounded Rectangle, Circle, Line, Polygon, Text.
