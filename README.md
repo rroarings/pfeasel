@@ -3,6 +3,8 @@
 ## Description
 PF Easel is a Java Swing-based 2D vector graphics application. It allows users to draw various shapes, add text and images, manipulate these elements on a canvas, and manage them through a layer system.
 
+![Main Window](docs/imgs/pfeasel-gh01.png)
+
 ## Features
 * **Drawing Tools**: Rectangle, Rounded Rectangle, Circle, Line, Polygon, Text.
 * **Image Support**: Load images from local files or URLs onto the canvas.
@@ -32,6 +34,8 @@ PF Easel is a Java Swing-based 2D vector graphics application. It allows users t
     * Toggleable anti-aliasing for smoother rendering.
 * **Undo/Redo**: Comprehensive undo/redo support for most drawing and manipulation actions.
 * **Generate Code**: Generate vanilla Java2D code for your drawing (see File > Generate Code).
+
+![Main Window](docs/imgs/pfeasel-gh02.png)
 
 ## How to Build and Run
 
