@@ -1,5 +1,16 @@
 package app;
 
+import com.formdev.flatlaf.FlatDarkLaf;
+import com.formdev.flatlaf.FlatIntelliJLaf;
+import com.formdev.flatlaf.FlatLightLaf;
+import com.formdev.flatlaf.FlatDarculaLaf;
+import com.formdev.flatlaf.intellijthemes.FlatArcDarkIJTheme;
+import com.formdev.flatlaf.intellijthemes.FlatCarbonIJTheme;
+import com.formdev.flatlaf.intellijthemes.FlatCobalt2IJTheme;
+import com.formdev.flatlaf.intellijthemes.FlatGrayIJTheme;
+import com.formdev.flatlaf.intellijthemes.FlatNordIJTheme;
+import com.formdev.flatlaf.intellijthemes.FlatSpacegrayIJTheme;
+import com.formdev.flatlaf.intellijthemes.FlatVuesionIJTheme;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.ListSelectionEvent;
@@ -59,6 +70,8 @@ public class ToolboxFrame extends JFrame {
     private JMenuItem generateCodeMenuItem; // Added for Generate Code
 
     private JSpinner fontSizeSpinner; // Added for font size selection
+
+    private String currentTheme = "Flat Light";
 
     public ToolboxFrame(Main mainFrame) {
         super("Toolbox");
@@ -681,8 +694,87 @@ public class ToolboxFrame extends JFrame {
         antiAliasingMenu.add(antiAliasingOnMenuItem);
         viewMenu.add(antiAliasingMenu);
 
+        // Theme Switcher
+        JMenu themeMenu = new JMenu("Theme");
+        ButtonGroup themeGroup = new ButtonGroup();
+        JRadioButtonMenuItem lightTheme = new JRadioButtonMenuItem("Flat Light");
+        JRadioButtonMenuItem intellijTheme = new JRadioButtonMenuItem("IntelliJ");
+        JRadioButtonMenuItem darkTheme = new JRadioButtonMenuItem("Flat Dark");
+        JRadioButtonMenuItem darculaTheme = new JRadioButtonMenuItem("Darcula");
+        JRadioButtonMenuItem arcDarkTheme = new JRadioButtonMenuItem("Arc Dark");
+        JRadioButtonMenuItem nordTheme = new JRadioButtonMenuItem("Nord");
+        JRadioButtonMenuItem spacegrayTheme = new JRadioButtonMenuItem("Spacegray");
+        lightTheme.setSelected(true);
+        themeGroup.add(lightTheme);
+        themeGroup.add(intellijTheme);
+        themeGroup.add(darkTheme);
+        themeGroup.add(darculaTheme);
+        themeGroup.add(arcDarkTheme);
+        themeGroup.add(nordTheme);
+        themeGroup.add(spacegrayTheme);
+        // Add light themes
+        themeMenu.add(lightTheme);
+        themeMenu.add(intellijTheme);
+        themeMenu.addSeparator();
+        // Add dark themes
+        themeMenu.add(darkTheme);
+        themeMenu.add(darculaTheme);
+        themeMenu.add(arcDarkTheme);
+        themeMenu.add(nordTheme);
+        themeMenu.add(spacegrayTheme);
+        viewMenu.addSeparator();
+        viewMenu.add(themeMenu);
+        // Theme switching actions
+        lightTheme.addActionListener(e -> switchTheme("Flat Light"));
+        intellijTheme.addActionListener(e -> switchTheme("IntelliJ"));
+        darkTheme.addActionListener(e -> switchTheme("Flat Dark"));
+        darculaTheme.addActionListener(e -> switchTheme("Darcula"));
+        arcDarkTheme.addActionListener(e -> switchTheme("Arc Dark"));
+        nordTheme.addActionListener(e -> switchTheme("Nord"));
+        spacegrayTheme.addActionListener(e -> switchTheme("Spacegray"));
+
         menuBar.add(viewMenu);
         setJMenuBar(menuBar);
+    }
+
+    private void switchTheme(String themeName) {
+        try {
+            String previousTheme = currentTheme;
+            switch (themeName) {
+                case "Flat Light":
+                    UIManager.setLookAndFeel(new FlatLightLaf());
+                    break;
+                case "Flat Dark":
+                    UIManager.setLookAndFeel(new FlatDarkLaf());
+                    break;
+                case "IntelliJ":
+                    UIManager.setLookAndFeel(new FlatIntelliJLaf());
+                    break;
+                case "Darcula":
+                    UIManager.setLookAndFeel(new FlatDarculaLaf());
+                    break;
+                case "Arc Dark":
+                    UIManager.setLookAndFeel(new FlatArcDarkIJTheme());
+                    break;
+                case "Nord":
+                    UIManager.setLookAndFeel(new FlatNordIJTheme());
+                    break;
+                case "Spacegray":
+                    UIManager.setLookAndFeel(new FlatSpacegrayIJTheme());
+                    break;
+                default:
+                    UIManager.setLookAndFeel(new FlatLightLaf());
+            }
+            currentTheme = themeName;
+            logger.info("Switched theme: from {} to {}", previousTheme, currentTheme);
+            SwingUtilities.updateComponentTreeUI(this);
+            if (mainFrame != null) {
+                SwingUtilities.updateComponentTreeUI(mainFrame);
+            }
+        } catch (Exception ex) {
+            logger.error("Failed to set theme: " + themeName, ex);
+            JOptionPane.showMessageDialog(this, "Failed to apply theme: " + themeName, "Theme Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     private JToggleButton createToolButton(String tooltip, String iconPath, ToolType toolType) { // Changed return type to JToggleButton
@@ -997,6 +1089,14 @@ public class ToolboxFrame extends JFrame {
 
         public boolean isConfirmed() {
             return confirmed;
+        }
+    }
+
+    public static void setupInitialTheme() {
+        try {
+            UIManager.setLookAndFeel(new com.formdev.flatlaf.FlatLightLaf());
+        } catch (Exception ex) {
+            System.err.println("Failed to initialize FlatLaf: " + ex.getMessage());
         }
     }
 }
