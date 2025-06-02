@@ -36,6 +36,7 @@ PFeasel Paint Creator is a Java Swing-based 2D vector graphics application. It a
 
 ### Prerequisites
 * Java Development Kit (JDK) 11 or newer.
+* [Maven](https://maven.apache.org/) (for building and running)
 
 ### Steps
 
@@ -44,10 +45,15 @@ PFeasel Paint Creator is a Java Swing-based 2D vector graphics application. It a
     git clone https://github.com/rroarings/pfeasel.git
     cd pfeasel-paint-creator
     ```
-2. **Open in IDE**:
-    * Open the project directory in your preferred Java IDE (e.g., IntelliJ IDEA, VS Code with Java Extension Pack, Eclipse).
-3. **Run**:
-    * Locate and run the `main` method in `src/app/Main.java`.
+2. **Build with Maven**:
+    ```bash
+    mvn clean package
+    ```
+    This will create a runnable JAR file in the `target/` directory (e.g., `pfeasel-paint-creator-1.0-jar-with-dependencies.jar`).
+3. **Run the Application**:
+    ```bash
+    java -jar target/pfeasel-paint-creator-1.0-jar-with-dependencies.jar
+    ```
 
 
 ## How to Use
@@ -69,7 +75,7 @@ PFeasel Paint Creator is a Java Swing-based 2D vector graphics application. It a
 ## Dependencies
 
 * Java Development Kit (JDK) 11 or newer.
-* No external libraries required.
+* [FlatLaf](https://www.formdev.com/flatlaf/) (modern look and feel, included via Maven)
 
 ## Future Enhancements
 
