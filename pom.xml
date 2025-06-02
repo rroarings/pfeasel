@@ -17,7 +17,13 @@
         <dependency>
             <groupId>com.formdev</groupId>
             <artifactId>flatlaf</artifactId>
-            <version>3.4</version>
+            <version>3.6</version>
+        </dependency>
+        <!-- FlatLaf IntelliJ Themes Pack -->
+        <dependency>
+            <groupId>com.formdev</groupId>
+            <artifactId>flatlaf-intellij-themes</artifactId>
+            <version>3.6</version>
         </dependency>
         <!-- SLF4J API -->
         <dependency>
