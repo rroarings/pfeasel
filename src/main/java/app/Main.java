@@ -373,6 +373,17 @@ public class Main extends JFrame {
         }
     }
 
+    private String getEffectiveDisplayName(PaintElement element) {
+        if (element == null) {
+            return "Unnamed";
+        }
+        String displayName = element.getDisplayName();
+        if (displayName == null || displayName.trim().isEmpty()) {
+            return element.getName();
+        }
+        return displayName;
+    }
+
     public void internalAddElementToList(PaintElement element, int index) {
         logger.debug("internalAddElementToList called with element={}, index={}", element, index);
         if (index < 0 || index > paintElements.size()) {
@@ -1041,9 +1052,9 @@ public class Main extends JFrame {
                             activeResizeHandle = ResizeHandle.NONE;
                             resizeStartBounds = null;
                             if (minSizeReachedDuringResize) {
-                                setLastActionStatus("Resized " + getEffectiveDisplayName(selectedElementForMove) + " (minimum size reached)");
+                                setLastActionStatus("Resized " + Main.this.getEffectiveDisplayName(selectedElementForMove) + " (minimum size reached)");
                             } else {
-                                setLastActionStatus("Resized " + getEffectiveDisplayName(selectedElementForMove));
+                                setLastActionStatus("Resized " + Main.this.getEffectiveDisplayName(selectedElementForMove));
                             }
                             minSizeReachedDuringResize = false;
                             updateMoveCursor(e.getPoint());
