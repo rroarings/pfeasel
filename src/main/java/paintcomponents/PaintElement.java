@@ -85,4 +85,24 @@ public interface PaintElement extends Serializable { // Added extends Serializab
      * @return A Rectangle object representing the bounds.
      */
     java.awt.Rectangle getBounds();
+
+    /**
+     * Indicates whether this element supports bounds-based resizing.
+     *
+     * @return true when the element can be resized via resize handles
+     */
+    default boolean isResizable() {
+        return false;
+    }
+
+    /**
+     * Resizes the element to the provided bounds.
+     * Default implementation returns false for non-resizable elements.
+     *
+     * @param newBounds the new bounds to apply
+     * @return true if resized, false if this element does not support resizing
+     */
+    default boolean resizeToBounds(java.awt.Rectangle newBounds) {
+        return false;
+    }
 }
