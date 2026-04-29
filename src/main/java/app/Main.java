@@ -366,8 +366,12 @@ public class Main extends JFrame {
     public void updateToolboxLayerList() {
         if (toolboxFrame != null) {
             List<String> layerNames = paintElements.stream()
-                                                 .map(PaintElement::getDisplayName)
+                                                 .map(this::getEffectiveDisplayName)
                                                  .collect(Collectors.toList());
+            int size = layerNames.size();
+            for (int i = 0; i < size; i++) {
+                layerNames.set(i, String.format("[%d] %s", size - 1 - i, layerNames.get(i)));
+            }
             Collections.reverse(layerNames); // To display top layer at the top of the list
             toolboxFrame.updateLayersList(layerNames);
         }
@@ -492,10 +496,8 @@ public class Main extends JFrame {
         String uniqueDisplayName = generateUniqueDisplayName(duplicatedElement.getName());
         duplicatedElement.setDisplayName(uniqueDisplayName);
         paintElements.add(0, duplicatedElement);
-        if (toolboxFrame != null) {
-            toolboxFrame.addLayerToList(uniqueDisplayName, 0);
-            toolboxFrame.selectLayerInList(0);
-        }
+        updateToolboxLayerList();
+        if (toolboxFrame != null) toolboxFrame.selectLayerInList(0);
         repaintDrawingPanel();
         setLastActionStatus("Duplicated '" + uniqueDisplayName + "'");
         logger.info("Element '{}' duplicated as '{}' at offset ({}, {})", originalElement.getDisplayName(), uniqueDisplayName, offsetX, offsetY);

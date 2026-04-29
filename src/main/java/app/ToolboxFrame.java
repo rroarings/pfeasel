@@ -360,7 +360,8 @@ public class ToolboxFrame extends JFrame {
         editBtn.addActionListener(e -> {
             int selectedIndex = layersList.getSelectedIndex();
             if (selectedIndex != -1) {
-                String currentName = layersModel.getElementAt(selectedIndex);
+                String currentLabel = layersModel.getElementAt(selectedIndex);
+                String currentName = stripLayerIndexPrefix(currentLabel);
                 Object newNameInputObj = JOptionPane.showInputDialog(ToolboxFrame.this, "Enter new layer name:", "Edit Layer Name", JOptionPane.PLAIN_MESSAGE, null, null, currentName);
 
                 if (newNameInputObj != null) { // User clicked OK or entered text
@@ -369,7 +370,8 @@ public class ToolboxFrame extends JFrame {
                         // Check for name uniqueness (optional, Main.java could also enforce this or handle conflicts)
                         boolean nameExists = false;
                         for (int i = 0; i < layersModel.getSize(); i++) {
-                            if (i != selectedIndex && layersModel.getElementAt(i).equals(newName)) {
+                            String existingName = stripLayerIndexPrefix(layersModel.getElementAt(i));
+                            if (i != selectedIndex && existingName.equals(newName)) {
                                 nameExists = true;
                                 break;
                             }
@@ -377,12 +379,11 @@ public class ToolboxFrame extends JFrame {
                         if (nameExists) {
                             JOptionPane.showMessageDialog(ToolboxFrame.this, "Layer name '" + newName + "' already exists.", "Name Conflict", JOptionPane.ERROR_MESSAGE);
                         } else {
-                            layersModel.setElementAt(newName, selectedIndex);
                             // Notify Main.java to update the PaintElement's displayName
                             if (mainFrame != null) {
                                 mainFrame.updatePaintElementDisplayName(selectedIndex, newName);
                             }
-                            logger.info("Edited layer: '" + currentName + "' to '" + newName + "' at JList index " + selectedIndex);
+                            logger.info("Edited layer: '" + currentLabel + "' to '" + newName + "' at JList index " + selectedIndex);
                         }
                     } else if (newName.isEmpty()) {
                         JOptionPane.showMessageDialog(ToolboxFrame.this, "Layer name cannot be empty.", "Invalid Name", JOptionPane.ERROR_MESSAGE);
@@ -925,6 +926,11 @@ public class ToolboxFrame extends JFrame {
     // Overloaded method to add to the top (index 0) by default, for new shapes
     public void addLayerToList(String layerName) {
         addLayerToList(layerName, 0);
+    }
+
+    private String stripLayerIndexPrefix(String label) {
+        if (label == null) return "";
+        return label.replaceFirst("^\\\\[\\\\d+\\\\]\\\\s*", "").trim();
     }
 
     public void moveLayerToTopInList(int oldIndex) {
