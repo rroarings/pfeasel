@@ -107,4 +107,24 @@ public class CircleElement implements PaintElement {
     public Rectangle getBounds() {
         return new Rectangle(x, y, width, height);
     }
+
+    public Color getFillColor() {
+        return fillColor;
+    }
+
+    public Color getStrokeColor() {
+        return strokeColor;
+    }
+
+    public float getStrokeWidth() {
+        return strokeWidth;
+    }
+
+    public boolean isFillEnabled() {
+        return fillEnabled;
+    }
+
+    public boolean isStrokeEnabled() {
+        return strokeEnabled;
+    }
 }
