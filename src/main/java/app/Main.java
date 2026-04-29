@@ -52,6 +52,9 @@ public class Main extends JFrame {
     private Point dragStartPoint;
     private Point dragOffset; // For moving elements
     private PaintElement selectedElementForMove = null; // Element being moved
+    private ResizeHandle activeResizeHandle = ResizeHandle.NONE;
+    private Rectangle resizeStartBounds = null;
+    private boolean minSizeReachedDuringResize = false;
     private Point startPoint; // Added for line drawing
     private Point endPoint; // Added for line drawing
     private Rectangle currentDrawingRectangle;
@@ -68,6 +71,22 @@ public class Main extends JFrame {
     private Stack<UndoableAction> redoStack = new Stack<>();
 
     private GridManager gridManager;
+
+    private static final int RESIZE_HANDLE_SIZE = 8;
+    private static final int RESIZE_HANDLE_HIT_SIZE = 12;
+    private static final int MIN_RESIZE_DIMENSION = 6;
+
+    private enum ResizeHandle {
+        NONE,
+        NORTH_WEST,
+        NORTH,
+        NORTH_EAST,
+        EAST,
+        SOUTH_EAST,
+        SOUTH,
+        SOUTH_WEST,
+        WEST
+    }
 
     public Main() {
         setTitle("PFeasel Paint Creator");
@@ -675,6 +694,190 @@ public class Main extends JFrame {
             return p;
         }
 
+        private PaintElement findTopmostElementAt(Point point) {
+            for (int i = 0; i < paintElements.size(); i++) {
+                PaintElement element = paintElements.get(i);
+                if (element != null && element.contains(point)) {
+                    return element;
+                }
+            }
+            return null;
+        }
+
+        private Rectangle getHandleRect(ResizeHandle handle, Rectangle bounds, int size) {
+            int half = size / 2;
+            int left = bounds.x;
+            int centerX = bounds.x + bounds.width / 2;
+            int right = bounds.x + bounds.width;
+            int top = bounds.y;
+            int centerY = bounds.y + bounds.height / 2;
+            int bottom = bounds.y + bounds.height;
+
+            switch (handle) {
+                case NORTH_WEST:
+                    return new Rectangle(left - half, top - half, size, size);
+                case NORTH:
+                    return new Rectangle(centerX - half, top - half, size, size);
+                case NORTH_EAST:
+                    return new Rectangle(right - half, top - half, size, size);
+                case EAST:
+                    return new Rectangle(right - half, centerY - half, size, size);
+                case SOUTH_EAST:
+                    return new Rectangle(right - half, bottom - half, size, size);
+                case SOUTH:
+                    return new Rectangle(centerX - half, bottom - half, size, size);
+                case SOUTH_WEST:
+                    return new Rectangle(left - half, bottom - half, size, size);
+                case WEST:
+                    return new Rectangle(left - half, centerY - half, size, size);
+                default:
+                    return null;
+            }
+        }
+
+        private ResizeHandle getResizeHandleAtPoint(Point point, Rectangle bounds) {
+            if (point == null || bounds == null || bounds.width <= 0 || bounds.height <= 0) {
+                return ResizeHandle.NONE;
+            }
+
+            ResizeHandle[] handles = {
+                ResizeHandle.NORTH_WEST,
+                ResizeHandle.NORTH,
+                ResizeHandle.NORTH_EAST,
+                ResizeHandle.EAST,
+                ResizeHandle.SOUTH_EAST,
+                ResizeHandle.SOUTH,
+                ResizeHandle.SOUTH_WEST,
+                ResizeHandle.WEST
+            };
+
+            for (ResizeHandle handle : handles) {
+                Rectangle hitRect = getHandleRect(handle, bounds, RESIZE_HANDLE_HIT_SIZE);
+                if (hitRect != null && hitRect.contains(point)) {
+                    return handle;
+                }
+            }
+            return ResizeHandle.NONE;
+        }
+
+        private Rectangle calculateResizedBounds(Rectangle originalBounds, ResizeHandle handle, Point currentPoint) {
+            int left = originalBounds.x;
+            int top = originalBounds.y;
+            int right = originalBounds.x + originalBounds.width;
+            int bottom = originalBounds.y + originalBounds.height;
+
+            switch (handle) {
+                case NORTH_WEST:
+                    left = Math.min(currentPoint.x, right - MIN_RESIZE_DIMENSION);
+                    top = Math.min(currentPoint.y, bottom - MIN_RESIZE_DIMENSION);
+                    break;
+                case NORTH:
+                    top = Math.min(currentPoint.y, bottom - MIN_RESIZE_DIMENSION);
+                    break;
+                case NORTH_EAST:
+                    right = Math.max(currentPoint.x, left + MIN_RESIZE_DIMENSION);
+                    top = Math.min(currentPoint.y, bottom - MIN_RESIZE_DIMENSION);
+                    break;
+                case EAST:
+                    right = Math.max(currentPoint.x, left + MIN_RESIZE_DIMENSION);
+                    break;
+                case SOUTH_EAST:
+                    right = Math.max(currentPoint.x, left + MIN_RESIZE_DIMENSION);
+                    bottom = Math.max(currentPoint.y, top + MIN_RESIZE_DIMENSION);
+                    break;
+                case SOUTH:
+                    bottom = Math.max(currentPoint.y, top + MIN_RESIZE_DIMENSION);
+                    break;
+                case SOUTH_WEST:
+                    left = Math.min(currentPoint.x, right - MIN_RESIZE_DIMENSION);
+                    bottom = Math.max(currentPoint.y, top + MIN_RESIZE_DIMENSION);
+                    break;
+                case WEST:
+                    left = Math.min(currentPoint.x, right - MIN_RESIZE_DIMENSION);
+                    break;
+                default:
+                    break;
+            }
+
+            return new Rectangle(left, top, right - left, bottom - top);
+        }
+
+        private Cursor getCursorForHandle(ResizeHandle handle) {
+            switch (handle) {
+                case NORTH_WEST:
+                case SOUTH_EAST:
+                    return Cursor.getPredefinedCursor(Cursor.NW_RESIZE_CURSOR);
+                case NORTH_EAST:
+                case SOUTH_WEST:
+                    return Cursor.getPredefinedCursor(Cursor.NE_RESIZE_CURSOR);
+                case NORTH:
+                case SOUTH:
+                    return Cursor.getPredefinedCursor(Cursor.N_RESIZE_CURSOR);
+                case EAST:
+                case WEST:
+                    return Cursor.getPredefinedCursor(Cursor.E_RESIZE_CURSOR);
+                default:
+                    return Cursor.getDefaultCursor();
+            }
+        }
+
+        private void updateMoveCursor(Point point) {
+            if (point == null) {
+                setCursor(Cursor.getDefaultCursor());
+                return;
+            }
+
+            if (activeResizeHandle != ResizeHandle.NONE) {
+                setCursor(getCursorForHandle(activeResizeHandle));
+                return;
+            }
+
+            if (selectedElementForMove != null && selectedElementForMove.isResizable()) {
+                Rectangle bounds = selectedElementForMove.getBounds();
+                ResizeHandle hoverHandle = getResizeHandleAtPoint(point, bounds);
+                if (hoverHandle != ResizeHandle.NONE) {
+                    setCursor(getCursorForHandle(hoverHandle));
+                    return;
+                }
+            }
+
+            PaintElement hoveredElement = findTopmostElementAt(point);
+            if (hoveredElement != null) {
+                setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
+            } else {
+                setCursor(Cursor.getDefaultCursor());
+            }
+        }
+
+        private void drawResizeHandles(Graphics2D g2d, Rectangle bounds) {
+            ResizeHandle[] handles = {
+                ResizeHandle.NORTH_WEST,
+                ResizeHandle.NORTH,
+                ResizeHandle.NORTH_EAST,
+                ResizeHandle.EAST,
+                ResizeHandle.SOUTH_EAST,
+                ResizeHandle.SOUTH,
+                ResizeHandle.SOUTH_WEST,
+                ResizeHandle.WEST
+            };
+
+            g2d.setColor(Color.WHITE);
+            for (ResizeHandle handle : handles) {
+                Rectangle handleRect = getHandleRect(handle, bounds, RESIZE_HANDLE_SIZE);
+                if (handleRect != null) {
+                    g2d.fillRect(handleRect.x, handleRect.y, handleRect.width, handleRect.height);
+                }
+            }
+
+            g2d.setColor(new Color(0, 70, 190));
+            for (ResizeHandle handle : handles) {
+                Rectangle handleRect = getHandleRect(handle, bounds, RESIZE_HANDLE_SIZE);
+                if (handleRect != null) {
+                    g2d.drawRect(handleRect.x, handleRect.y, handleRect.width, handleRect.height);
+                }
+            }
+        }
+
         public DrawingPanel() {
             setPreferredSize(new Dimension(765, 503));
             setBackground(Color.LIGHT_GRAY);
@@ -686,8 +889,15 @@ public class Main extends JFrame {
                 public void mouseMoved(MouseEvent e) {
                     statusLabel.setText("X: " + e.getX() + ", Y: " + e.getY());
                     ToolboxFrame.ToolType selectedTool = (toolboxFrame != null) ? toolboxFrame.getSelectedTool() : null;
+                    Point currentMousePoint = e.getPoint();
+
+                    if (selectedTool == ToolboxFrame.ToolType.MOVE) {
+                        updateMoveCursor(currentMousePoint);
+                    } else {
+                        setCursor(Cursor.getDefaultCursor());
+                    }
+
                     if (selectedTool == ToolboxFrame.ToolType.POLYGON) {
-                        Point currentMousePoint = e.getPoint();
                         if (snapToGridActive && gridManager.isGridVisible()) {
                             endPoint = snapPointToGrid(currentMousePoint);
                         } else {
@@ -710,16 +920,29 @@ public class Main extends JFrame {
                     }
 
                     if (selectedTool == ToolboxFrame.ToolType.MOVE && selectedElementForMove != null) {
-                        int newX = currentMousePoint.x - dragOffset.x;
-                        int newY = currentMousePoint.y - dragOffset.y;
+                        if (activeResizeHandle != ResizeHandle.NONE && resizeStartBounds != null && selectedElementForMove.isResizable()) {
+                            Point resizePoint = currentMousePoint;
+                            if (snapToGridActive && gridManager.isGridVisible()) {
+                                resizePoint = snapPointToGrid(resizePoint);
+                            }
 
-                        if (snapToGridActive && gridManager.isGridVisible()) {
-                            Point snappedPosition = snapPointToGrid(new Point(newX, newY));
-                            selectedElementForMove.setPosition(snappedPosition.x, snappedPosition.y);
-                        } else {
-                            selectedElementForMove.setPosition(newX, newY);
+                            Rectangle resizedBounds = calculateResizedBounds(resizeStartBounds, activeResizeHandle, resizePoint);
+                            minSizeReachedDuringResize = (resizedBounds.width <= MIN_RESIZE_DIMENSION || resizedBounds.height <= MIN_RESIZE_DIMENSION);
+                            selectedElementForMove.resizeToBounds(resizedBounds);
+                            updateMoveCursor(currentMousePoint);
+                            repaint();
+                        } else if (dragOffset != null) {
+                            int newX = currentMousePoint.x - dragOffset.x;
+                            int newY = currentMousePoint.y - dragOffset.y;
+
+                            if (snapToGridActive && gridManager.isGridVisible()) {
+                                Point snappedPosition = snapPointToGrid(new Point(newX, newY));
+                                selectedElementForMove.setPosition(snappedPosition.x, snappedPosition.y);
+                            } else {
+                                selectedElementForMove.setPosition(newX, newY);
+                            }
+                            repaint();
                         }
-                        repaint();
                     } else if (selectedTool == ToolboxFrame.ToolType.LINE) {
                         repaint();
                     } else if ((selectedTool == ToolboxFrame.ToolType.RECTANGLE ||
@@ -741,29 +964,57 @@ public class Main extends JFrame {
 
             addMouseListener(new MouseAdapter() {
                 @Override
+                public void mouseExited(MouseEvent e) {
+                    setCursor(Cursor.getDefaultCursor());
+                }
+
+                @Override
                 public void mousePressed(MouseEvent e) {
                     ToolboxFrame.ToolType selectedTool = (toolboxFrame != null) ? toolboxFrame.getSelectedTool() : null;
                     Point currentPoint = e.getPoint();
 
                     if (selectedTool == ToolboxFrame.ToolType.MOVE) {
-                        selectedElementForMove = null;
-                        for (int i = 0; i < paintElements.size(); i++) {
-                            PaintElement element = paintElements.get(i);
-                            if (element.contains(currentPoint)) {
-                                selectedElementForMove = element;
-                                Point elementPos = selectedElementForMove.getPosition();
-                                dragOffset = new Point(currentPoint.x - elementPos.x, currentPoint.y - elementPos.y);
-                                // Select the corresponding layer in the layers list
-                                if (toolboxFrame != null) {
-                                    int layerIndex = paintElements.size() - 1 - i;
-                                    toolboxFrame.selectLayerInList(layerIndex);
-                                }
+                        activeResizeHandle = ResizeHandle.NONE;
+                        resizeStartBounds = null;
+                        dragOffset = null;
+                        minSizeReachedDuringResize = false;
+
+                        if (selectedElementForMove != null && selectedElementForMove.isResizable()) {
+                            Rectangle selectedBounds = selectedElementForMove.getBounds();
+                            ResizeHandle clickedHandle = getResizeHandleAtPoint(currentPoint, selectedBounds);
+                            if (clickedHandle != ResizeHandle.NONE) {
+                                activeResizeHandle = clickedHandle;
+                                resizeStartBounds = new Rectangle(selectedBounds);
+                                updateMoveCursor(currentPoint);
                                 repaint();
-                                break;
+                                return;
                             }
                         }
+
+                        PaintElement hitElement = findTopmostElementAt(currentPoint);
+                        if (hitElement != null) {
+                            selectedElementForMove = hitElement;
+                            Point elementPos = selectedElementForMove.getPosition();
+                            dragOffset = new Point(currentPoint.x - elementPos.x, currentPoint.y - elementPos.y);
+
+                            if (toolboxFrame != null) {
+                                int hitIndex = paintElements.indexOf(hitElement);
+                                if (hitIndex >= 0) {
+                                    int layerIndex = paintElements.size() - 1 - hitIndex;
+                                    toolboxFrame.selectLayerInList(layerIndex);
+                                }
+                            }
+                        } else {
+                            selectedElementForMove = null;
+                        }
+                        repaint();
                     } else {
                         selectedElementForMove = null;
+                        activeResizeHandle = ResizeHandle.NONE;
+                        resizeStartBounds = null;
+                        dragOffset = null;
+                        minSizeReachedDuringResize = false;
+                        setCursor(Cursor.getDefaultCursor());
                         if (snapToGridActive && gridManager.isGridVisible()) {
                             startPoint = snapPointToGrid(currentPoint);
                         } else {
@@ -785,24 +1036,37 @@ public class Main extends JFrame {
                 public void mouseReleased(MouseEvent e) {
                     ToolboxFrame.ToolType selectedTool = (toolboxFrame != null) ? toolboxFrame.getSelectedTool() : null;
                     
-                    if (selectedTool == ToolboxFrame.ToolType.MOVE && selectedElementForMove != null) {
-                        Point finalMousePosition = e.getPoint();
-                        int newX = finalMousePosition.x - dragOffset.x;
-                        int newY = finalMousePosition.y - dragOffset.y;
-                        Point finalElementPos = new Point(newX, newY);
-
-                        if (snapToGridActive && gridManager.isGridVisible()) {
-                            finalElementPos = snapPointToGrid(finalElementPos);
-                        }
-                        selectedElementForMove.setPosition(finalElementPos.x, finalElementPos.y);
-                        
-                        int selectedIndexInPaintElements = paintElements.indexOf(selectedElementForMove);
-                        if (selectedIndexInPaintElements == 0 && toolboxFrame != null) {
-                            selectedElementForMove = null;
-                            dragOffset = null;
+                    if (selectedTool == ToolboxFrame.ToolType.MOVE) {
+                        if (selectedElementForMove != null && activeResizeHandle != ResizeHandle.NONE) {
+                            activeResizeHandle = ResizeHandle.NONE;
+                            resizeStartBounds = null;
+                            if (minSizeReachedDuringResize) {
+                                setLastActionStatus("Resized " + getEffectiveDisplayName(selectedElementForMove) + " (minimum size reached)");
+                            } else {
+                                setLastActionStatus("Resized " + getEffectiveDisplayName(selectedElementForMove));
+                            }
+                            minSizeReachedDuringResize = false;
+                            updateMoveCursor(e.getPoint());
                             repaint();
                             return;
                         }
+
+                        if (selectedElementForMove != null && dragOffset != null) {
+                            Point finalMousePosition = e.getPoint();
+                            int newX = finalMousePosition.x - dragOffset.x;
+                            int newY = finalMousePosition.y - dragOffset.y;
+                            Point finalElementPos = new Point(newX, newY);
+
+                            if (snapToGridActive && gridManager.isGridVisible()) {
+                                finalElementPos = snapPointToGrid(finalElementPos);
+                            }
+                            selectedElementForMove.setPosition(finalElementPos.x, finalElementPos.y);
+                        }
+
+                        dragOffset = null;
+                        updateMoveCursor(e.getPoint());
+                        repaint();
+                        return;
                     }
                     
                     Point originalEndPoint = e.getPoint();
@@ -1037,6 +1301,10 @@ public class Main extends JFrame {
                     g2d.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10f, dash, 0f));
                     g2d.drawRect(bounds.x - 2, bounds.y - 2, bounds.width + 4, bounds.height + 4);
                     g2d.setStroke(oldStroke);
+
+                    if (selectedElementForMove.isResizable() && bounds.width > 0 && bounds.height > 0) {
+                        drawResizeHandles(g2d, bounds);
+                    }
                 }
             }
             // Draw bounding box for preview when drawing new elements
