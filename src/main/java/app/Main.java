@@ -699,17 +699,28 @@ public class Main extends JFrame {
             ToolboxFrame toolbox = new ToolboxFrame(frame);
             frame.setToolboxFrame(toolbox);
 
-            // Show main window first
-            frame.setVisible(true);
-
-            // Move toolbox to the left of the main window
-            Point mainWindowLocation = frame.getLocation();
-            int toolboxWidth = toolbox.getWidth();
-            int mainWindowY = mainWindowLocation.y;
-            int mainWindowX = mainWindowLocation.x;
-            toolbox.setLocation(mainWindowX - toolboxWidth, mainWindowY);
-            toolbox.setVisible(true);
+            showApplicationWindows(frame, toolbox);
         });
+    }
+
+    private static void showApplicationWindows(Main frame, ToolboxFrame toolbox) {
+        frame.setExtendedState(JFrame.NORMAL);
+        frame.setVisible(true);
+        frame.toFront();
+        frame.requestFocus();
+
+        Rectangle screenBounds = GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds();
+        Point mainWindowLocation = frame.getLocation();
+        int toolboxWidth = toolbox.getWidth();
+        int toolboxX = Math.max(screenBounds.x, mainWindowLocation.x - toolboxWidth);
+        int toolboxY = Math.max(screenBounds.y, mainWindowLocation.y);
+
+        toolbox.setLocation(toolboxX, toolboxY);
+        toolbox.setExtendedState(JFrame.NORMAL);
+        toolbox.setVisible(true);
+        toolbox.toFront();
+        toolbox.requestFocus();
+        frame.toFront();
     }
 
     // Add this getter for MoveElementAction

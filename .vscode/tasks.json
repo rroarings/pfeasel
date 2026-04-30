@@ -1,0 +1,49 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Kill PF Easel",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "Get-CimInstance Win32_Process | Where-Object { $_.Name -match '^javaw?\\.exe$' -and $_.CommandLine -match 'app\\.Main' -and $_.CommandLine -match 'pfeasel' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"
+      ],
+      "problemMatcher": []
+    }
+  ]
+}{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Maven: compile",
+      "type": "shell",
+      "command": "C:\\tools\\apache-maven-3.9.15\\bin\\mvn.cmd",
+      "args": [
+        "compile"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": [
+        "$javac"
+      ]
+    },
+    {
+      "label": "Maven: clean package",
+      "type": "shell",
+      "command": "C:\\tools\\apache-maven-3.9.15\\bin\\mvn.cmd",
+      "args": [
+        "clean",
+        "package"
+      ],
+      "problemMatcher": [
+        "$javac"
+      ]
+    }
+  ]
+}
