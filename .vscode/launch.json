@@ -1,0 +1,27 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "Run PF Easel",
+      "request": "launch",
+      "mainClass": "app.Main",
+      "projectName": "pfeasel-paint-creator",
+      "cwd": "${workspaceFolder}",
+      "postDebugTask": "Kill PF Easel"
+    }
+  ]
+}{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "Run PF Easel",
+      "request": "launch",
+      "preLaunchTask": "Maven: compile",
+      "mainClass": "app.Main",
+      "projectName": "pfeasel-paint-creator",
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

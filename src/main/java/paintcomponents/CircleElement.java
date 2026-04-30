@@ -108,23 +108,20 @@ public class CircleElement implements PaintElement {
         return new Rectangle(x, y, width, height);
     }
 
-    public Color getFillColor() {
-        return fillColor;
+    @Override
+    public boolean isResizable() {
+        return true;
     }
 
-    public Color getStrokeColor() {
-        return strokeColor;
-    }
-
-    public float getStrokeWidth() {
-        return strokeWidth;
-    }
-
-    public boolean isFillEnabled() {
-        return fillEnabled;
-    }
-
-    public boolean isStrokeEnabled() {
-        return strokeEnabled;
+    @Override
+    public boolean resizeToBounds(Rectangle newBounds) {
+        if (newBounds == null || newBounds.width <= 0 || newBounds.height <= 0) {
+            return false;
+        }
+        this.x = newBounds.x;
+        this.y = newBounds.y;
+        this.width = newBounds.width;
+        this.height = newBounds.height;
+        return true;
     }
 }

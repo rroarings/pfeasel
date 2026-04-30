@@ -70,7 +70,7 @@ public class LineElement implements PaintElement {
 
     @Override
     public String getName() {
-        return "Line " + getX1() + "," + getY1();
+        return "Line";
     }
 
     @Override

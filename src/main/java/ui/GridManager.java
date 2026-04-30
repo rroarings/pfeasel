@@ -20,15 +20,24 @@ public class GridManager {
         this.repaintCallback = repaintCallback;
     }
 
+    private void triggerRepaint() {
+        if (repaintCallback != null) {
+            repaintCallback.run();
+        }
+    }
+
+    private void addLabeledField(JPanel panel, String label, JComponent field) {
+        panel.add(new JLabel(label));
+        panel.add(field);
+    }
+
     public boolean isGridVisible() { // Renamed from isShowGrid
         return gridVisible;
     }
 
     public void setGridVisible(boolean gridVisible) { // Renamed from setShowGrid
         this.gridVisible = gridVisible;
-        if (repaintCallback != null) {
-            repaintCallback.run();
-        }
+        triggerRepaint();
     }
 
     public int getGridSpacingWidth() {
@@ -38,9 +47,7 @@ public class GridManager {
     public void setGridSpacingWidth(int gridSpacingWidth) {
         if (gridSpacingWidth > 0) {
             this.gridSpacingWidth = gridSpacingWidth;
-            if (repaintCallback != null) {
-                repaintCallback.run();
-            }
+            triggerRepaint();
         }
     }
 
@@ -51,9 +58,7 @@ public class GridManager {
     public void setGridSpacingHeight(int gridSpacingHeight) {
         if (gridSpacingHeight > 0) {
             this.gridSpacingHeight = gridSpacingHeight;
-            if (repaintCallback != null) {
-                repaintCallback.run();
-            }
+            triggerRepaint();
         }
     }
 
@@ -71,9 +76,7 @@ public class GridManager {
 
     public void setGridColor(Color gridColor) {
         this.gridColor = gridColor;
-        if (repaintCallback != null) {
-            repaintCallback.run();
-        }
+        triggerRepaint();
     }
 
     public void resetGridToDefaults() { // Ensure this is the correct name
@@ -81,9 +84,7 @@ public class GridManager {
         this.gridSpacingHeight = DEFAULT_GRID_SPACING_HEIGHT;
         this.gridColor = DEFAULT_GRID_COLOR;
         // gridVisible is not reset by default, only its properties
-        if (repaintCallback != null) {
-            repaintCallback.run();
-        }
+        triggerRepaint();
     }
 
     public void drawGrid(Graphics g, int canvasWidth, int canvasHeight) {
@@ -122,12 +123,10 @@ public class GridManager {
         // Panel for spinners
         JPanel spinnersPanel = new JPanel(new GridLayout(0, 2, 5, 5));
         spinnersPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        spinnersPanel.add(new JLabel("Grid Width:"));
         JSpinner widthSpinner = new JSpinner(new SpinnerNumberModel(tempGridSpacingWidth, 1, 500, 1));
-        spinnersPanel.add(widthSpinner);
-        spinnersPanel.add(new JLabel("Grid Height:"));
         JSpinner heightSpinner = new JSpinner(new SpinnerNumberModel(tempGridSpacingHeight, 1, 500, 1));
-        spinnersPanel.add(heightSpinner);
+        addLabeledField(spinnersPanel, "Grid Width:", widthSpinner);
+        addLabeledField(spinnersPanel, "Grid Height:", heightSpinner);
 
         // Panel for color chooser
         JPanel colorPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));

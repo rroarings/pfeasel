@@ -9,29 +9,21 @@ import actions.ClearAllAction;
 import actions.DeleteElementAction;
 import actions.ReorderLayerAction;
 import actions.UndoableAction;
-import paintcomponents.RectangleElement;
-import paintcomponents.RoundRectangleElement;
-import paintcomponents.CircleElement;
-import paintcomponents.LineElement;
-import paintcomponents.PolygonElement;
-import paintcomponents.TextElement;
 import paintcomponents.ImageElement;
 import ui.GridManager;
 
 import paintcomponents.PaintElement;
 
 import java.awt.*;
-import java.awt.event.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.List;
-import java.util.Stack;
 import java.util.stream.Collectors;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.net.URL;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,16 +39,14 @@ public class Main extends JFrame {
     private BufferedImage rsInterfaceImage;
 
     private ToolboxFrame toolboxFrame;
+    private final ElementService elementService;
+    private final ProjectIOService projectIOService;
+    private final ImageImportService imageImportService;
+    private final CanvasRenderer canvasRenderer;
+    private final DrawingController drawingController;
+    private final ShapeCreationService shapeCreationService;
 
     private List<PaintElement> paintElements = new ArrayList<>();
-    private Point dragStartPoint;
-    private Point dragOffset; // For moving elements
-    private PaintElement selectedElementForMove = null; // Element being moved
-    private Point startPoint; // Added for line drawing
-    private Point endPoint; // Added for line drawing
-    private Rectangle currentDrawingRectangle;
-    private List<Point> currentPolygonPoints; // Added for polygon drawing
-    private boolean isDrawingPolygon = false; // Added for polygon drawing state
 
     // New state fields
     private boolean rsInterfaceVisible = true;
@@ -64,8 +54,8 @@ public class Main extends JFrame {
     private boolean antiAliasingActive = true; // Default to on
 
     // Undo/Redo stacks
-    private Stack<UndoableAction> undoStack = new Stack<>();
-    private Stack<UndoableAction> redoStack = new Stack<>();
+    private final Deque<UndoableAction> undoStack = new ArrayDeque<>();
+    private final Deque<UndoableAction> redoStack = new ArrayDeque<>();
 
     private GridManager gridManager;
 
@@ -74,10 +64,16 @@ public class Main extends JFrame {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new BorderLayout());
 
+        elementService = new ElementService();
+        projectIOService = new ProjectIOService();
+        imageImportService = new ImageImportService();
+        canvasRenderer = new CanvasRenderer();
+        shapeCreationService = new ShapeCreationService();
         gridManager = new GridManager(this::repaintDrawingPanel);
+        drawingController = new DrawingController(this);
 
         loadRSInterfaceImage();
-        drawingPanel = new DrawingPanel();
+        drawingPanel = new DrawingPanel(this, drawingController, canvasRenderer, shapeCreationService);
         add(drawingPanel, BorderLayout.CENTER);
 
         // Add left padding to statusLabel
@@ -147,8 +143,8 @@ public class Main extends JFrame {
             handleSaveAs();
             return;
         }
-        try (ObjectOutputStream oos = new ObjectOutputStream(new java.io.FileOutputStream(currentSaveFile))) {
-            oos.writeObject(paintElements);
+        try {
+            projectIOService.save(currentSaveFile, paintElements);
             setStatus("Saved to " + currentSaveFile.getName());
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Failed to save: " + ex.getMessage(), "Save Error", JOptionPane.ERROR_MESSAGE);
@@ -178,23 +174,14 @@ public class Main extends JFrame {
         chooser.setFileFilter(filter);
         if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
             File file = chooser.getSelectedFile();
-            try (ObjectInputStream ois = new ObjectInputStream(new java.io.FileInputStream(file))) {
-                Object obj = ois.readObject();
-                if (obj instanceof List) {
-                    List<?> loaded = (List<?>) obj;
-                    List<PaintElement> loadedElements = new ArrayList<>();
-                    for (Object o : loaded) {
-                        if (o instanceof PaintElement) loadedElements.add((PaintElement) o);
-                    }
-                    paintElements.clear();
-                    paintElements.addAll(loadedElements);
-                    setCurrentSaveFile(file);
-                    updateToolboxLayerList();
-                    drawingPanel.repaint();
-                    setStatus("Opened " + file.getName());
-                } else {
-                    throw new Exception("File does not contain a valid drawing.");
-                }
+            try {
+                List<PaintElement> loadedElements = projectIOService.load(file);
+                paintElements.clear();
+                paintElements.addAll(loadedElements);
+                setCurrentSaveFile(file);
+                updateToolboxLayerList();
+                drawingPanel.repaint();
+                setStatus("Opened " + file.getName());
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(this, "Failed to open: " + ex.getMessage(), "Open Error", JOptionPane.ERROR_MESSAGE);
                 setStatus("Open failed");
@@ -211,9 +198,7 @@ public class Main extends JFrame {
             return;
         }
         try {
-            URL imageUrl = new java.io.File(new java.net.URI(url)).toURI().toURL();
-            BufferedImage img = javax.imageio.ImageIO.read(imageUrl);
-            if (img == null) throw new Exception("Could not load image from URL.");
+            BufferedImage img = imageImportService.loadFromUrlString(url);
             ImageElement element = new ImageElement(img, new Point(50, 50), url, "Image");
             paintElements.add(0, element);
             updateToolboxLayerList();
@@ -230,8 +215,7 @@ public class Main extends JFrame {
         if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
             File file = chooser.getSelectedFile();
             try {
-                BufferedImage img = javax.imageio.ImageIO.read(file);
-                if (img == null) throw new Exception("Could not load image file.");
+                BufferedImage img = imageImportService.loadFromFile(file);
                 ImageElement element = new ImageElement(img, new Point(50, 50), file.getAbsolutePath(), "Image");
                 paintElements.add(0, element);
                 updateToolboxLayerList();
@@ -347,11 +331,64 @@ public class Main extends JFrame {
     public void updateToolboxLayerList() {
         if (toolboxFrame != null) {
             List<String> layerNames = paintElements.stream()
-                                                 .map(PaintElement::getDisplayName)
+                                                 .map(this::getEffectiveDisplayName)
                                                  .collect(Collectors.toList());
+            int size = layerNames.size();
+            for (int i = 0; i < size; i++) {
+                layerNames.set(i, String.format("[%d] %s", size - 1 - i, layerNames.get(i)));
+            }
             Collections.reverse(layerNames); // To display top layer at the top of the list
             toolboxFrame.updateLayersList(layerNames);
         }
+    }
+
+    private String getEffectiveDisplayName(PaintElement element) {
+        if (element == null) {
+            return "Unnamed";
+        }
+        String displayName = element.getDisplayName();
+        if (displayName == null || displayName.trim().isEmpty()) {
+            return element.getName();
+        }
+        return displayName;
+    }
+
+    public String getElementDisplayName(PaintElement element) {
+        return getEffectiveDisplayName(element);
+    }
+
+    public String generateUniqueDisplayName(String baseName) {
+        return generateUniqueDisplayNameInternal(baseName);
+    }
+
+    public void updateMouseCoordinates(int x, int y) {
+        if (statusLabel != null) {
+            statusLabel.setText("X: " + x + ", Y: " + y);
+        }
+    }
+
+    public GridManager getGridManager() {
+        return gridManager;
+    }
+
+    public ToolboxFrame getToolboxFrame() {
+        return toolboxFrame;
+    }
+
+    public BufferedImage getRsInterfaceImage() {
+        return rsInterfaceImage;
+    }
+
+    private boolean isValidPaintElementIndex(int index) {
+        return elementService.isValidIndex(paintElements, index);
+    }
+
+    private int toPaintElementIndex(int toolboxIndex) {
+        return elementService.toPaintElementIndex(paintElements.size(), toolboxIndex);
+    }
+
+    private void reorderPaintElements(int fromIndex, int toIndex) {
+        elementService.moveElement(paintElements, fromIndex, toIndex);
     }
 
     public void internalAddElementToList(PaintElement element, int index) {
@@ -378,7 +415,7 @@ public class Main extends JFrame {
 
     public void internalRemoveElementFromList(int index) {
         logger.debug("internalRemoveElementFromList called with index={}", index);
-        if (index >= 0 && index < paintElements.size()) {
+        if (isValidPaintElementIndex(index)) {
             paintElements.remove(index);
             updateToolboxLayerList();
             drawingPanel.repaint();
@@ -437,7 +474,7 @@ public class Main extends JFrame {
             JOptionPane.showMessageDialog(this, "Please select a layer to duplicate.", "No Layer Selected", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        int actualPaintElementIndex = paintElements.size() - 1 - selectedIndexInListModel;
+        int actualPaintElementIndex = toPaintElementIndex(selectedIndexInListModel);
         if (actualPaintElementIndex < 0 || actualPaintElementIndex >= paintElements.size()) {
             logger.error("Error duplicating element: Calculated paintElements index {} is out of bounds. List size: {}, JList index: {}", actualPaintElementIndex, paintElements.size(), selectedIndexInListModel);
             JOptionPane.showMessageDialog(this, "Error finding the selected layer. Please try again.", "Duplication Error", JOptionPane.ERROR_MESSAGE);
@@ -462,10 +499,8 @@ public class Main extends JFrame {
         String uniqueDisplayName = generateUniqueDisplayName(duplicatedElement.getName());
         duplicatedElement.setDisplayName(uniqueDisplayName);
         paintElements.add(0, duplicatedElement);
-        if (toolboxFrame != null) {
-            toolboxFrame.addLayerToList(uniqueDisplayName, 0);
-            toolboxFrame.selectLayerInList(0);
-        }
+        updateToolboxLayerList();
+        if (toolboxFrame != null) toolboxFrame.selectLayerInList(0);
         repaintDrawingPanel();
         setLastActionStatus("Duplicated '" + uniqueDisplayName + "'");
         logger.info("Element '{}' duplicated as '{}' at offset ({}, {})", originalElement.getDisplayName(), uniqueDisplayName, offsetX, offsetY);
@@ -504,8 +539,7 @@ public class Main extends JFrame {
         if (listIndexInToolbox > 0 && listIndexInToolbox < paintElements.size()) {
             PaintElement element = paintElements.get(listIndexInToolbox);
 
-            paintElements.remove(listIndexInToolbox);
-            paintElements.add(listIndexInToolbox - 1, element);
+            reorderPaintElements(listIndexInToolbox, listIndexInToolbox - 1);
 
             UndoableAction action = new ReorderLayerAction(this, element, listIndexInToolbox - 1, listIndexInToolbox);
             addUndoableAction(action);
@@ -523,8 +557,7 @@ public class Main extends JFrame {
         if (listIndexInToolbox >= 0 && listIndexInToolbox < paintElements.size() - 1) {
             PaintElement element = paintElements.get(listIndexInToolbox);
 
-            paintElements.remove(listIndexInToolbox);
-            paintElements.add(listIndexInToolbox + 1, element);
+            reorderPaintElements(listIndexInToolbox, listIndexInToolbox + 1);
 
             UndoableAction action = new ReorderLayerAction(this, element, listIndexInToolbox + 1, listIndexInToolbox);
             addUndoableAction(action);
@@ -627,7 +660,7 @@ public class Main extends JFrame {
         logger.info("Anti-aliasing set to: " + active);
     }
 
-    private String generateUniqueDisplayName(String baseName) {
+    private String generateUniqueDisplayNameInternal(String baseName) {
         int count = 1;
         String currentName = baseName + " " + count;
         boolean nameExists;
@@ -657,483 +690,8 @@ public class Main extends JFrame {
         dialog.setVisible(true);
     }
 
-    class DrawingPanel extends JPanel {
 
-        private int snapToGridValue(int value, int gridSize) {
-            if (snapToGridActive && gridSize > 0) {
-                return (int) (Math.round((double) value / gridSize) * gridSize);
-            }
-            return value;
-        }
 
-        private Point snapPointToGrid(Point p) {
-            if (snapToGridActive && gridManager.isGridVisible()) {
-                int snappedX = snapToGridValue(p.x, gridManager.getGridWidth());
-                int snappedY = snapToGridValue(p.y, gridManager.getGridHeight());
-                return new Point(snappedX, snappedY);
-            }
-            return p;
-        }
-
-        public DrawingPanel() {
-            setPreferredSize(new Dimension(765, 503));
-            setBackground(Color.LIGHT_GRAY);
-            setFocusable(true);
-            currentPolygonPoints = new ArrayList<>();
-
-            addMouseMotionListener(new MouseAdapter() {
-                @Override
-                public void mouseMoved(MouseEvent e) {
-                    statusLabel.setText("X: " + e.getX() + ", Y: " + e.getY());
-                    ToolboxFrame.ToolType selectedTool = (toolboxFrame != null) ? toolboxFrame.getSelectedTool() : null;
-                    if (selectedTool == ToolboxFrame.ToolType.POLYGON) {
-                        Point currentMousePoint = e.getPoint();
-                        if (snapToGridActive && gridManager.isGridVisible()) {
-                            endPoint = snapPointToGrid(currentMousePoint);
-                        } else {
-                            endPoint = currentMousePoint;
-                        }
-                        repaint();
-                    }
-                }
-
-                @Override
-                public void mouseDragged(MouseEvent e) {
-                    statusLabel.setText("X: " + e.getX() + ", Y: " + e.getY());
-                    ToolboxFrame.ToolType selectedTool = (toolboxFrame != null) ? toolboxFrame.getSelectedTool() : null;
-                    Point currentMousePoint = e.getPoint();
-
-                    if (snapToGridActive && gridManager.isGridVisible()) {
-                        endPoint = snapPointToGrid(currentMousePoint);
-                    } else {
-                        endPoint = currentMousePoint;
-                    }
-
-                    if (selectedTool == ToolboxFrame.ToolType.MOVE && selectedElementForMove != null) {
-                        int newX = currentMousePoint.x - dragOffset.x;
-                        int newY = currentMousePoint.y - dragOffset.y;
-
-                        if (snapToGridActive && gridManager.isGridVisible()) {
-                            Point snappedPosition = snapPointToGrid(new Point(newX, newY));
-                            selectedElementForMove.setPosition(snappedPosition.x, snappedPosition.y);
-                        } else {
-                            selectedElementForMove.setPosition(newX, newY);
-                        }
-                        repaint();
-                    } else if (selectedTool == ToolboxFrame.ToolType.LINE) {
-                        repaint();
-                    } else if ((selectedTool == ToolboxFrame.ToolType.RECTANGLE ||
-                                selectedTool == ToolboxFrame.ToolType.ROUND_RECTANGLE ||
-                                selectedTool == ToolboxFrame.ToolType.CIRCLE) && dragStartPoint != null) {
-                        
-                        Point effectiveDragStartPoint = dragStartPoint;
-                        Point effectiveEndPoint = endPoint;
-
-                        int x = Math.min(effectiveDragStartPoint.x, effectiveEndPoint.x);
-                        int y = Math.min(effectiveDragStartPoint.y, effectiveEndPoint.y);
-                        int width = Math.abs(effectiveDragStartPoint.x - effectiveEndPoint.x);
-                        int height = Math.abs(effectiveDragStartPoint.y - effectiveEndPoint.y);
-                        currentDrawingRectangle = new Rectangle(x, y, width, height);
-                        repaint();
-                    }
-                }
-            });
-
-            addMouseListener(new MouseAdapter() {
-                @Override
-                public void mousePressed(MouseEvent e) {
-                    ToolboxFrame.ToolType selectedTool = (toolboxFrame != null) ? toolboxFrame.getSelectedTool() : null;
-                    Point currentPoint = e.getPoint();
-
-                    if (selectedTool == ToolboxFrame.ToolType.MOVE) {
-                        selectedElementForMove = null;
-                        for (int i = 0; i < paintElements.size(); i++) {
-                            PaintElement element = paintElements.get(i);
-                            if (element.contains(currentPoint)) {
-                                selectedElementForMove = element;
-                                Point elementPos = selectedElementForMove.getPosition();
-                                dragOffset = new Point(currentPoint.x - elementPos.x, currentPoint.y - elementPos.y);
-                                // Select the corresponding layer in the layers list
-                                if (toolboxFrame != null) {
-                                    int layerIndex = paintElements.size() - 1 - i;
-                                    toolboxFrame.selectLayerInList(layerIndex);
-                                }
-                                repaint();
-                                break;
-                            }
-                        }
-                    } else {
-                        selectedElementForMove = null;
-                        if (snapToGridActive && gridManager.isGridVisible()) {
-                            startPoint = snapPointToGrid(currentPoint);
-                        } else {
-                            startPoint = currentPoint;
-                        }
-                        currentDrawingRectangle = null;
-                        if (selectedTool == ToolboxFrame.ToolType.LINE) {
-                            endPoint = startPoint;
-                        } else if (selectedTool == ToolboxFrame.ToolType.RECTANGLE ||
-                                   selectedTool == ToolboxFrame.ToolType.ROUND_RECTANGLE ||
-                                   selectedTool == ToolboxFrame.ToolType.CIRCLE) {
-                            dragStartPoint = startPoint;
-                            endPoint = startPoint;
-                        }
-                    }
-                }
-
-                @Override
-                public void mouseReleased(MouseEvent e) {
-                    ToolboxFrame.ToolType selectedTool = (toolboxFrame != null) ? toolboxFrame.getSelectedTool() : null;
-                    
-                    if (selectedTool == ToolboxFrame.ToolType.MOVE && selectedElementForMove != null) {
-                        Point finalMousePosition = e.getPoint();
-                        int newX = finalMousePosition.x - dragOffset.x;
-                        int newY = finalMousePosition.y - dragOffset.y;
-                        Point finalElementPos = new Point(newX, newY);
-
-                        if (snapToGridActive && gridManager.isGridVisible()) {
-                            finalElementPos = snapPointToGrid(finalElementPos);
-                        }
-                        selectedElementForMove.setPosition(finalElementPos.x, finalElementPos.y);
-                        
-                        int selectedIndexInPaintElements = paintElements.indexOf(selectedElementForMove);
-                        if (selectedIndexInPaintElements == 0 && toolboxFrame != null) {
-                            selectedElementForMove = null;
-                            dragOffset = null;
-                            repaint();
-                            return;
-                        }
-                    }
-                    
-                    Point originalEndPoint = e.getPoint();
-                    
-                    if (snapToGridActive && gridManager.isGridVisible()) {
-                        endPoint = snapPointToGrid(originalEndPoint);
-                    } else {
-                        endPoint = originalEndPoint;
-                    }
-
-                    if (startPoint == null) return;
-
-                    PaintElement newElement = null;
-                    String uniqueDisplayName = "";
-
-                    if ((selectedTool == ToolboxFrame.ToolType.RECTANGLE || 
-                         selectedTool == ToolboxFrame.ToolType.ROUND_RECTANGLE || 
-                         selectedTool == ToolboxFrame.ToolType.CIRCLE) && dragStartPoint != null && toolboxFrame != null) {
-                        
-                        Point effectiveDragStartPoint = dragStartPoint;
-                        Point effectiveEndPoint = endPoint;
-
-                        int x = Math.min(effectiveDragStartPoint.x, effectiveEndPoint.x);
-                        int y = Math.min(effectiveDragStartPoint.y, effectiveEndPoint.y);
-                        int width = Math.abs(effectiveDragStartPoint.x - effectiveEndPoint.x);
-                        int height = Math.abs(effectiveDragStartPoint.y - effectiveEndPoint.y);
-                        currentDrawingRectangle = new Rectangle(x, y, width, height);
-                    }
-
-                    switch (selectedTool) {
-                        case RECTANGLE:
-                            if (currentDrawingRectangle == null || currentDrawingRectangle.width == 0 || currentDrawingRectangle.height == 0 || toolboxFrame == null) break;
-                            newElement = new RectangleElement(
-                                    currentDrawingRectangle.x, currentDrawingRectangle.y,
-                                    currentDrawingRectangle.width, currentDrawingRectangle.height,
-                                    toolboxFrame.isFillEnabled() ? toolboxFrame.getFillColor() : null,
-                                    toolboxFrame.isStrokeEnabled() ? toolboxFrame.getStrokeColor() : null,
-                                    (float) toolboxFrame.getCurrentStrokeWidth(),
-                                    toolboxFrame.isFillEnabled(),
-                                    toolboxFrame.isStrokeEnabled());
-                            break;
-                        case ROUND_RECTANGLE:
-                            if (currentDrawingRectangle == null || currentDrawingRectangle.width == 0 || currentDrawingRectangle.height == 0 || toolboxFrame == null) break;
-                            newElement = new RoundRectangleElement(
-                                    currentDrawingRectangle.x, currentDrawingRectangle.y,
-                                    currentDrawingRectangle.width, currentDrawingRectangle.height,
-                                    toolboxFrame.getArcWidth(), toolboxFrame.getArcHeight(),
-                                    toolboxFrame.isFillEnabled() ? toolboxFrame.getFillColor() : null,
-                                    toolboxFrame.isStrokeEnabled() ? toolboxFrame.getStrokeColor() : null,
-                                    (float) toolboxFrame.getCurrentStrokeWidth(),
-                                    toolboxFrame.isFillEnabled(),
-                                    toolboxFrame.isStrokeEnabled());
-                            break;
-                        case CIRCLE:
-                            if (currentDrawingRectangle == null || currentDrawingRectangle.width == 0 || currentDrawingRectangle.height == 0 || toolboxFrame == null) break;
-                            newElement = new CircleElement(
-                                    currentDrawingRectangle.x, currentDrawingRectangle.y,
-                                    currentDrawingRectangle.width, currentDrawingRectangle.height,
-                                    toolboxFrame.isFillEnabled() ? toolboxFrame.getFillColor() : null,
-                                    toolboxFrame.isStrokeEnabled() ? toolboxFrame.getStrokeColor() : null,
-                                    (float) toolboxFrame.getCurrentStrokeWidth(),
-                                    toolboxFrame.isFillEnabled(),
-                                    toolboxFrame.isStrokeEnabled());
-                            break;
-                        case LINE:
-                            if (toolboxFrame == null) break;
-                            Color strokeColor = toolboxFrame.getStrokeColor();
-                            float strokeWidth = (float) toolboxFrame.getCurrentStrokeWidth();
-                            if (strokeColor != null && strokeWidth > 0) {
-                                newElement = new LineElement(startPoint.x, startPoint.y, endPoint.x, endPoint.y, strokeColor, strokeWidth);
-                            }
-                            break;
-                        default:
-                            break;
-                    }
-
-                    if (newElement != null) {
-                        if (toolboxFrame != null) {
-                            newElement.setShadow(toolboxFrame.isShadowEnabled());
-                            uniqueDisplayName = generateUniqueDisplayName(newElement.getName());
-                            newElement.setDisplayName(uniqueDisplayName);
-                            addPaintElement(newElement);
-                            // Show element name and coordinates with a space after the comma
-                            if (currentDrawingRectangle != null && (selectedTool == ToolboxFrame.ToolType.RECTANGLE || selectedTool == ToolboxFrame.ToolType.ROUND_RECTANGLE || selectedTool == ToolboxFrame.ToolType.CIRCLE)) {
-                                setLastActionStatus("Drew " + uniqueDisplayName + " at " + currentDrawingRectangle.x + ", " + currentDrawingRectangle.y);
-                            } else if (selectedTool == ToolboxFrame.ToolType.LINE && startPoint != null && endPoint != null) {
-                                setLastActionStatus("Drew line from " + startPoint.x + ", " + startPoint.y + " to " + endPoint.x + ", " + endPoint.y);
-                            } else {
-                                setLastActionStatus("Drew " + uniqueDisplayName);
-                            }
-                        }
-                    }
-
-                    startPoint = null;
-                    dragStartPoint = null;
-                    currentDrawingRectangle = null;
-                    repaint();
-                }
-
-                @Override
-                public void mouseClicked(MouseEvent e) {
-                    logger.info("[DEBUG] mouseClicked entered. Tool: " + ((toolboxFrame != null) ? toolboxFrame.getSelectedTool() : "N/A") + ", Click at: " + e.getPoint());
-                    ToolboxFrame.ToolType selectedTool = (toolboxFrame != null) ? toolboxFrame.getSelectedTool() : null;
-                    Point clickedPoint = e.getPoint();
-
-                    if (snapToGridActive && gridManager.isGridVisible()) {
-                        clickedPoint = snapPointToGrid(clickedPoint);
-                    }
-
-                    if (isDrawingPolygon && selectedTool != ToolboxFrame.ToolType.POLYGON) {
-                        if (currentPolygonPoints.size() >= 3) {
-                            logger.info("Polygon finalized due to tool change.");
-                            finalizePolygon();
-                        } else {
-                            logger.info("Polygon drawing cancelled due to tool change (not enough points).");
-                            isDrawingPolygon = false;
-                            currentPolygonPoints.clear();
-                            repaint();
-                        }
-                    }
-
-                    if (selectedTool == ToolboxFrame.ToolType.TEXT) {
-                        if (toolboxFrame == null) return;
-                        String text = toolboxFrame.getTextInput();
-                        if (text.isEmpty()) {
-                            JOptionPane.showMessageDialog(Main.this, "Please enter text in the toolbox first.", "Text Input Empty", JOptionPane.INFORMATION_MESSAGE);
-                            return;
-                        }
-                        Font font = toolboxFrame.getSelectedFont();
-                        Color color = toolboxFrame.getFillColor();
-                        if (!toolboxFrame.isFillEnabled()) {
-                            color = toolboxFrame.isStrokeEnabled() ? toolboxFrame.getStrokeColor() : Color.BLACK;
-                        }
-
-                        TextElement textElement = new TextElement(text, clickedPoint.x, clickedPoint.y, font, color);
-                        textElement.setShadow(toolboxFrame.isShadowEnabled());
-                        String uniqueDisplayName = generateUniqueDisplayName(textElement.getName());
-                        textElement.setDisplayName(uniqueDisplayName);
-                        
-                        addPaintElement(textElement);
-                        repaint();
-
-                    } else if (selectedTool == ToolboxFrame.ToolType.POLYGON) {
-                        isDrawingPolygon = true;
-
-                        if (!currentPolygonPoints.isEmpty() && currentPolygonPoints.size() >= 2) { 
-                            Point firstPoint = currentPolygonPoints.get(0);
-                            final int CLOSING_TOLERANCE = 8;
-                            if (clickedPoint.distance(firstPoint) <= CLOSING_TOLERANCE) {
-                                logger.info("Polygon closed by clicking first point.");
-                                finalizePolygon();
-                                return;
-                            }
-                        }
-
-                        currentPolygonPoints.add(clickedPoint);
-                        logger.info("Added polygon point: " + clickedPoint + ", total points: " + currentPolygonPoints.size());
-                        
-                        if (e.getClickCount() == 2 && currentPolygonPoints.size() >= 3) {
-                            logger.info("Polygon finalized by double-click.");
-                            finalizePolygon();
-                        } else {
-                            repaint();
-                        }
-                    }
-                }
-            });
-        }
-        
-        private void finalizePolygon() {
-            if (currentPolygonPoints.size() >= 3) {
-                if (toolboxFrame == null) return;
-                Color fillColor = toolboxFrame.isFillEnabled() ? toolboxFrame.getFillColor() : null;
-                Color strokeColor = toolboxFrame.isStrokeEnabled() ? toolboxFrame.getStrokeColor() : null;
-                float strokeWidth = (float) toolboxFrame.getCurrentStrokeWidth();
-
-                PolygonElement newPolygon = new PolygonElement(currentPolygonPoints, 
-                                                               fillColor, strokeColor, strokeWidth, 
-                                                               toolboxFrame.isFillEnabled(), toolboxFrame.isStrokeEnabled());
-                newPolygon.setShadow(toolboxFrame.isShadowEnabled());
-                String uniqueDisplayName = generateUniqueDisplayName(newPolygon.getName());
-                newPolygon.setDisplayName(uniqueDisplayName);
-                addPaintElement(newPolygon);
-                setLastActionStatus("Drew polygon '" + uniqueDisplayName + "' with " + currentPolygonPoints.size() + " points");
-                logger.info("Polygon finalized with " + currentPolygonPoints.size() + " points. Name: " + uniqueDisplayName);
-            }
-            currentPolygonPoints.clear();
-            isDrawingPolygon = false;
-            startPoint = null;
-            endPoint = null;
-            repaint();
-        }
-
-        @Override
-        protected void paintComponent(Graphics g) {
-            super.paintComponent(g);
-            Graphics2D g2d = (Graphics2D) g;
-
-            if (antiAliasingActive) {
-                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-            } else {
-                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
-                g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);
-            }
-
-            if (rsInterfaceVisible && rsInterfaceImage != null) {
-                g2d.drawImage(rsInterfaceImage, 0, 0, this);
-            }
-
-            if (gridManager.isGridVisible()) {
-                gridManager.drawGrid(g2d, getWidth(), getHeight());
-            }
-
-            for (int i = paintElements.size() - 1; i >= 0; i--) {
-                PaintElement element = paintElements.get(i);
-                if (element != null) {
-                    if (element.hasShadow() && toolboxFrame != null) {
-                        element.drawShadow(g2d, toolboxFrame.getShadowColor(), toolboxFrame.getShadowXOffset(), toolboxFrame.getShadowYOffset());
-                    }
-                    element.draw(g2d);
-                }
-            }
-
-            // Draw selection bounding box for MOVE tool
-            if (toolboxFrame != null && toolboxFrame.getSelectedTool() == ToolboxFrame.ToolType.MOVE && selectedElementForMove != null) {
-                Rectangle bounds = selectedElementForMove.getBounds();
-                if (bounds != null) {
-                    g2d.setColor(Color.BLUE);
-                    float[] dash = {4f, 4f};
-                    Stroke oldStroke = g2d.getStroke();
-                    g2d.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10f, dash, 0f));
-                    g2d.drawRect(bounds.x - 2, bounds.y - 2, bounds.width + 4, bounds.height + 4);
-                    g2d.setStroke(oldStroke);
-                }
-            }
-            // Draw bounding box for preview when drawing new elements
-            if (startPoint != null && endPoint != null) {
-                ToolboxFrame.ToolType previewTool = (toolboxFrame != null) ? toolboxFrame.getSelectedTool() : null;
-                if (previewTool == null || toolboxFrame == null) return;
-                if ((previewTool == ToolboxFrame.ToolType.RECTANGLE ||
-                     previewTool == ToolboxFrame.ToolType.ROUND_RECTANGLE ||
-                     previewTool == ToolboxFrame.ToolType.CIRCLE ||
-                     previewTool == ToolboxFrame.ToolType.LINE) && currentDrawingRectangle != null) {
-                    g2d.setColor(new Color(0, 120, 255, 128)); // semi-transparent blue
-                    float[] dash = {4f, 4f};
-                    Stroke oldStroke = g2d.getStroke();
-                    g2d.setStroke(new BasicStroke(1.2f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10f, dash, 0f));
-                    g2d.drawRect(currentDrawingRectangle.x - 2, currentDrawingRectangle.y - 2, currentDrawingRectangle.width + 4, currentDrawingRectangle.height + 4);
-                    g2d.setStroke(oldStroke);
-                }
-            }
-
-            if (startPoint != null && endPoint != null) {
-                ToolboxFrame.ToolType previewTool = (toolboxFrame != null) ? toolboxFrame.getSelectedTool() : null;
-                if (previewTool == null || toolboxFrame == null) return;
-
-                Color previewFillColor = toolboxFrame.isFillEnabled() ? toolboxFrame.getFillColor() : null;
-                Color previewStrokeColor = toolboxFrame.isStrokeEnabled() ? toolboxFrame.getStrokeColor() : null;
-                float previewStrokeWidth = (float) toolboxFrame.getCurrentStrokeWidth();
-
-                if (previewTool == ToolboxFrame.ToolType.LINE) {
-                    if (toolboxFrame.isStrokeEnabled() && previewStrokeColor != null && previewStrokeWidth > 0) {
-                        g2d.setColor(previewStrokeColor);
-                        g2d.setStroke(new BasicStroke(previewStrokeWidth));
-                        g2d.drawLine(startPoint.x, startPoint.y, endPoint.x, endPoint.y);
-                    }
-                } else if (currentDrawingRectangle != null) {
-                    if (toolboxFrame.isFillEnabled() && previewFillColor != null) {
-                        g2d.setColor(previewFillColor);
-                        switch (previewTool) {
-                            case RECTANGLE:
-                                g2d.fillRect(currentDrawingRectangle.x, currentDrawingRectangle.y, currentDrawingRectangle.width, currentDrawingRectangle.height);
-                                break;
-                            case ROUND_RECTANGLE:
-                                g2d.fillRoundRect(currentDrawingRectangle.x, currentDrawingRectangle.y, currentDrawingRectangle.width, currentDrawingRectangle.height, toolboxFrame.getArcWidth(), toolboxFrame.getArcHeight());
-                                break;
-                            case CIRCLE:
-                                g2d.fillOval(currentDrawingRectangle.x, currentDrawingRectangle.y, currentDrawingRectangle.width, currentDrawingRectangle.height);
-                                break;
-                            default:
-                                break;
-                        }
-                    }
-                    if (toolboxFrame.isStrokeEnabled() && previewStrokeColor != null && previewStrokeWidth > 0) {
-                        g2d.setColor(previewStrokeColor);
-                        g2d.setStroke(new BasicStroke(previewStrokeWidth));
-                        switch (previewTool) {
-                            case RECTANGLE:
-                                g2d.drawRect(currentDrawingRectangle.x, currentDrawingRectangle.y, currentDrawingRectangle.width, currentDrawingRectangle.height);
-                                break;
-                            case ROUND_RECTANGLE:
-                                g2d.drawRoundRect(currentDrawingRectangle.x, currentDrawingRectangle.y, currentDrawingRectangle.width, currentDrawingRectangle.height, toolboxFrame.getArcWidth(), toolboxFrame.getArcHeight());
-                                break;
-                            case CIRCLE:
-                                g2d.drawOval(currentDrawingRectangle.x, currentDrawingRectangle.y, currentDrawingRectangle.width, currentDrawingRectangle.height);
-                                break;
-                            default:
-                                break;
-                        }
-                    }
-                }
-            }
-            
-            if (isDrawingPolygon && !currentPolygonPoints.isEmpty()) {
-                g2d.setColor(Color.GRAY);
-                Point prevPoint = null;
-                ToolboxFrame.ToolType currentTool = (toolboxFrame != null) ? toolboxFrame.getSelectedTool() : null;
-
-                for (int i = 0; i < currentPolygonPoints.size(); i++) {
-                    Point p = currentPolygonPoints.get(i);
-                    if (i == 0) {
-                        g2d.setColor(Color.GREEN);
-                        g2d.fillOval(p.x - 4, p.y - 4, 8, 8);
-                        g2d.setColor(Color.GRAY);
-                    } else {
-                        g2d.fillOval(p.x - 3, p.y - 3, 6, 6);
-                    }
-
-                    if (prevPoint != null) {
-                        g2d.drawLine(prevPoint.x, prevPoint.y, p.x, p.y);
-                    }
-                    prevPoint = p;
-                }
-
-                if (prevPoint != null && endPoint != null && currentTool == ToolboxFrame.ToolType.POLYGON) {
-                    g2d.drawLine(prevPoint.x, prevPoint.y, endPoint.x, endPoint.y);
-                }
-            }
-        }
-    }
 
     public static void main(String[] args) {
         // Set FlatLaf theme before any Swing UI is created
@@ -1143,17 +701,28 @@ public class Main extends JFrame {
             ToolboxFrame toolbox = new ToolboxFrame(frame);
             frame.setToolboxFrame(toolbox);
 
-            // Show main window first
-            frame.setVisible(true);
-
-            // Move toolbox to the left of the main window
-            Point mainWindowLocation = frame.getLocation();
-            int toolboxWidth = toolbox.getWidth();
-            int mainWindowY = mainWindowLocation.y;
-            int mainWindowX = mainWindowLocation.x;
-            toolbox.setLocation(mainWindowX - toolboxWidth, mainWindowY);
-            toolbox.setVisible(true);
+            showApplicationWindows(frame, toolbox);
         });
+    }
+
+    private static void showApplicationWindows(Main frame, ToolboxFrame toolbox) {
+        frame.setExtendedState(JFrame.NORMAL);
+        frame.setVisible(true);
+        frame.toFront();
+        frame.requestFocus();
+
+        Rectangle screenBounds = GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds();
+        Point mainWindowLocation = frame.getLocation();
+        int toolboxWidth = toolbox.getWidth();
+        int toolboxX = Math.max(screenBounds.x, mainWindowLocation.x - toolboxWidth);
+        int toolboxY = Math.max(screenBounds.y, mainWindowLocation.y);
+
+        toolbox.setLocation(toolboxX, toolboxY);
+        toolbox.setExtendedState(JFrame.NORMAL);
+        toolbox.setVisible(true);
+        toolbox.toFront();
+        toolbox.requestFocus();
+        frame.toFront();
     }
 
     // Add this getter for MoveElementAction

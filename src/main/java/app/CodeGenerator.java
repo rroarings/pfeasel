@@ -34,7 +34,7 @@ public class CodeGenerator {
     private int fontCounter = 1;
     private int pathCounter = 1;
 
-    public String generateCode(List<PaintElement> paintElements) {
+    private void resetState() {
         imports.clear();
         colorDeclarations.clear();
         strokeDeclarations.clear();
@@ -47,6 +47,17 @@ public class CodeGenerator {
         strokeCounter = 1;
         fontCounter = 1;
         pathCounter = 1;
+    }
+
+    private void appendDeclarations(StringBuilder fullCode, List<String> declarations) {
+        if (!declarations.isEmpty()) {
+            declarations.forEach(decl -> fullCode.append(decl).append("\n"));
+            fullCode.append("\n");
+        }
+    }
+
+    public String generateCode(List<PaintElement> paintElements) {
+        resetState();
 
         imports.add("import java.awt.*;");
         imports.add("import java.awt.geom.GeneralPath;");
@@ -80,22 +91,10 @@ public class CodeGenerator {
             appendLine(fullCode, INDENT1, "}");
             fullCode.append(NL);
         }
-        if (!colorDeclarations.isEmpty()) {
-            colorDeclarations.forEach(decl -> appendLine(fullCode, decl));
-            fullCode.append(NL);
-        }
-        if (!strokeDeclarations.isEmpty()) {
-            strokeDeclarations.forEach(decl -> appendLine(fullCode, decl));
-            fullCode.append(NL);
-        }
-        if (!fontDeclarations.isEmpty()) {
-            fontDeclarations.forEach(decl -> appendLine(fullCode, decl));
-            fullCode.append(NL);
-        }
-        if (!pathDeclarations.isEmpty()) {
-            pathDeclarations.forEach(decl -> appendLine(fullCode, decl));
-            fullCode.append(NL);
-        }
+        appendDeclarations(fullCode, colorDeclarations);
+        appendDeclarations(fullCode, strokeDeclarations);
+        appendDeclarations(fullCode, fontDeclarations);
+        appendDeclarations(fullCode, pathDeclarations);
         fullCode.append(drawingCode);
         fullCode.append("// END: Code generated using PFeasel Paint Creator");
         return fullCode.toString();

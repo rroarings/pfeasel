@@ -100,24 +100,15 @@ public class ToolboxFrame extends JFrame {
         JToggleButton moveTool = createToolButton("Move", "/img/ui/mdi--cursor-move.png", ToolType.MOVE);
 
         // Add tool buttons to sidebar
-        sidebar.add(textTool);
-        toolButtons.put(ToolType.TEXT, textTool);
-        sidebar.add(rectTool);
-        toolButtons.put(ToolType.RECTANGLE, rectTool);
-        sidebar.add(roundRectTool);
-        toolButtons.put(ToolType.ROUND_RECTANGLE, roundRectTool);
-        sidebar.add(circleTool);
-        toolButtons.put(ToolType.CIRCLE, circleTool);
-        sidebar.add(lineTool);
-        toolButtons.put(ToolType.LINE, lineTool);
-        sidebar.add(polygonTool);
-        toolButtons.put(ToolType.POLYGON, polygonTool);
-        sidebar.add(imageUrlTool); // Add Image URL tool to sidebar
-        toolButtons.put(ToolType.IMAGE_URL, imageUrlTool); // Add to map
-        sidebar.add(imageLocalTool); // Add Local Image tool to sidebar
-        toolButtons.put(ToolType.IMAGE_LOCAL, imageLocalTool); // Add to map
-        sidebar.add(moveTool);
-        toolButtons.put(ToolType.MOVE, moveTool);
+        registerToolButton(sidebar, ToolType.TEXT, textTool);
+        registerToolButton(sidebar, ToolType.RECTANGLE, rectTool);
+        registerToolButton(sidebar, ToolType.ROUND_RECTANGLE, roundRectTool);
+        registerToolButton(sidebar, ToolType.CIRCLE, circleTool);
+        registerToolButton(sidebar, ToolType.LINE, lineTool);
+        registerToolButton(sidebar, ToolType.POLYGON, polygonTool);
+        registerToolButton(sidebar, ToolType.IMAGE_URL, imageUrlTool);
+        registerToolButton(sidebar, ToolType.IMAGE_LOCAL, imageLocalTool);
+        registerToolButton(sidebar, ToolType.MOVE, moveTool);
 
         // Right panel (controls)
         JPanel controlsPanel = new JPanel(new GridBagLayout()); // Changed to GridBagLayout
@@ -360,7 +351,8 @@ public class ToolboxFrame extends JFrame {
         editBtn.addActionListener(e -> {
             int selectedIndex = layersList.getSelectedIndex();
             if (selectedIndex != -1) {
-                String currentName = layersModel.getElementAt(selectedIndex);
+                String currentLabel = layersModel.getElementAt(selectedIndex);
+                String currentName = stripLayerIndexPrefix(currentLabel);
                 Object newNameInputObj = JOptionPane.showInputDialog(ToolboxFrame.this, "Enter new layer name:", "Edit Layer Name", JOptionPane.PLAIN_MESSAGE, null, null, currentName);
 
                 if (newNameInputObj != null) { // User clicked OK or entered text
@@ -369,7 +361,8 @@ public class ToolboxFrame extends JFrame {
                         // Check for name uniqueness (optional, Main.java could also enforce this or handle conflicts)
                         boolean nameExists = false;
                         for (int i = 0; i < layersModel.getSize(); i++) {
-                            if (i != selectedIndex && layersModel.getElementAt(i).equals(newName)) {
+                            String existingName = stripLayerIndexPrefix(layersModel.getElementAt(i));
+                            if (i != selectedIndex && existingName.equals(newName)) {
                                 nameExists = true;
                                 break;
                             }
@@ -377,12 +370,11 @@ public class ToolboxFrame extends JFrame {
                         if (nameExists) {
                             JOptionPane.showMessageDialog(ToolboxFrame.this, "Layer name '" + newName + "' already exists.", "Name Conflict", JOptionPane.ERROR_MESSAGE);
                         } else {
-                            layersModel.setElementAt(newName, selectedIndex);
                             // Notify Main.java to update the PaintElement's displayName
                             if (mainFrame != null) {
                                 mainFrame.updatePaintElementDisplayName(selectedIndex, newName);
                             }
-                            logger.info("Edited layer: '" + currentName + "' to '" + newName + "' at JList index " + selectedIndex);
+                            logger.info("Edited layer: '" + currentLabel + "' to '" + newName + "' at JList index " + selectedIndex);
                         }
                     } else if (newName.isEmpty()) {
                         JOptionPane.showMessageDialog(ToolboxFrame.this, "Layer name cannot be empty.", "Invalid Name", JOptionPane.ERROR_MESSAGE);
@@ -788,6 +780,11 @@ public class ToolboxFrame extends JFrame {
         return button;
     }
 
+    private void registerToolButton(JPanel sidebar, ToolType toolType, JToggleButton button) {
+        sidebar.add(button);
+        toolButtons.put(toolType, button);
+    }
+
     private void updateCurrentFont() {
         int style = Font.PLAIN;
         if (isBold) style |= Font.BOLD;
@@ -925,6 +922,11 @@ public class ToolboxFrame extends JFrame {
     // Overloaded method to add to the top (index 0) by default, for new shapes
     public void addLayerToList(String layerName) {
         addLayerToList(layerName, 0);
+    }
+
+    private String stripLayerIndexPrefix(String label) {
+        if (label == null) return "";
+        return label.replaceFirst("^\\\\[\\\\d+\\\\]\\\\s*", "").trim();
     }
 
     public void moveLayerToTopInList(int oldIndex) {
