@@ -182,16 +182,4 @@ public class TextElement implements PaintElement {
         }
         return bounds != null ? new Rectangle(bounds) : new Rectangle(x,y,0,0);
     }
-
-    public String getText() {
-        return text;
-    }
-
-    public Font getFont() {
-        return font;
-    }
-
-    public Color getColor() {
-        return color;
-    }
 }
