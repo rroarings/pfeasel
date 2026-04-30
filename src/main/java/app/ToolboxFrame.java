@@ -100,24 +100,15 @@ public class ToolboxFrame extends JFrame {
         JToggleButton moveTool = createToolButton("Move", "/img/ui/mdi--cursor-move.png", ToolType.MOVE);
 
         // Add tool buttons to sidebar
-        sidebar.add(textTool);
-        toolButtons.put(ToolType.TEXT, textTool);
-        sidebar.add(rectTool);
-        toolButtons.put(ToolType.RECTANGLE, rectTool);
-        sidebar.add(roundRectTool);
-        toolButtons.put(ToolType.ROUND_RECTANGLE, roundRectTool);
-        sidebar.add(circleTool);
-        toolButtons.put(ToolType.CIRCLE, circleTool);
-        sidebar.add(lineTool);
-        toolButtons.put(ToolType.LINE, lineTool);
-        sidebar.add(polygonTool);
-        toolButtons.put(ToolType.POLYGON, polygonTool);
-        sidebar.add(imageUrlTool); // Add Image URL tool to sidebar
-        toolButtons.put(ToolType.IMAGE_URL, imageUrlTool); // Add to map
-        sidebar.add(imageLocalTool); // Add Local Image tool to sidebar
-        toolButtons.put(ToolType.IMAGE_LOCAL, imageLocalTool); // Add to map
-        sidebar.add(moveTool);
-        toolButtons.put(ToolType.MOVE, moveTool);
+        registerToolButton(sidebar, ToolType.TEXT, textTool);
+        registerToolButton(sidebar, ToolType.RECTANGLE, rectTool);
+        registerToolButton(sidebar, ToolType.ROUND_RECTANGLE, roundRectTool);
+        registerToolButton(sidebar, ToolType.CIRCLE, circleTool);
+        registerToolButton(sidebar, ToolType.LINE, lineTool);
+        registerToolButton(sidebar, ToolType.POLYGON, polygonTool);
+        registerToolButton(sidebar, ToolType.IMAGE_URL, imageUrlTool);
+        registerToolButton(sidebar, ToolType.IMAGE_LOCAL, imageLocalTool);
+        registerToolButton(sidebar, ToolType.MOVE, moveTool);
 
         // Right panel (controls)
         JPanel controlsPanel = new JPanel(new GridBagLayout()); // Changed to GridBagLayout
@@ -787,6 +778,11 @@ public class ToolboxFrame extends JFrame {
         button.addActionListener(e -> setSelectedTool(toolType));
         button.setFocusable(false); // Prevent focus highlight interfering with selection highlight
         return button;
+    }
+
+    private void registerToolButton(JPanel sidebar, ToolType toolType, JToggleButton button) {
+        sidebar.add(button);
+        toolButtons.put(toolType, button);
     }
 
     private void updateCurrentFont() {
