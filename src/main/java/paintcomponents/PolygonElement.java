@@ -121,4 +121,28 @@ public class PolygonElement implements PaintElement {
     public Rectangle getBounds() {
         return polygon.getBounds();
     }
+
+    public Polygon getPolygon() {
+        return polygon;
+    }
+
+    public Color getFillColor() {
+        return fillColor;
+    }
+
+    public Color getStrokeColor() {
+        return strokeColor;
+    }
+
+    public float getStrokeWidth() {
+        return strokeWidth;
+    }
+
+    public boolean isFillEnabled() {
+        return fillEnabled;
+    }
+
+    public boolean isStrokeEnabled() {
+        return strokeEnabled;
+    }
 }
