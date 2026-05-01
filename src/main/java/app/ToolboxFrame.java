@@ -95,8 +95,8 @@ public class ToolboxFrame extends JFrame {
         JToggleButton circleTool = createToolButton("Circle", "/img/ui/circle.png", ToolType.CIRCLE);
         JToggleButton lineTool = createToolButton("Line", "/img/ui/line.png", ToolType.LINE);
         JToggleButton polygonTool = createToolButton("Polygon", "/img/ui/polygon.png", ToolType.POLYGON);
-        JToggleButton imageUrlTool = createToolButton("Image URL", "/img/ui/image.png", ToolType.IMAGE_URL);
-        JToggleButton imageLocalTool = createToolButton("Local Image", "/img/ui/image-search.png", ToolType.IMAGE_LOCAL);
+        JToggleButton imageUrlTool = createToolButton("Image URL", "/img/ui/image-search.png", ToolType.IMAGE_URL);
+        JToggleButton imageLocalTool = createToolButton("Local Image", "/img/ui/image.png", ToolType.IMAGE_LOCAL);
         JToggleButton moveTool = createToolButton("Move", "/img/ui/cursor-move.png", ToolType.MOVE);
         JToggleButton freehandTool = createToolButton("Freehand", "/img/ui/pen.png", ToolType.FREEHAND);
         JToggleButton bezierTool = createToolButton("Bezier Curve", "/img/ui/bezier-curve.png", ToolType.BEZIER);
@@ -289,11 +289,12 @@ public class ToolboxFrame extends JFrame {
         layersList = new JList<>(layersModel);
         layersList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION); // Ensure single selection
         // Initialize buttons here so the listener can access them
-        JButton upBtn = new JButton("▲");
-        JButton downBtn = new JButton("▼");
-        JButton duplicateBtn = new JButton("❏");
-        JButton editBtn = new JButton("✎");
-        JButton deleteBtn = new JButton("🗑");
+        JButton upBtn = createLayerButton("Move Layer Up", "/img/ui/layer-up.png", "▲");
+        JButton downBtn = createLayerButton("Move Layer Down", "/img/ui/layer-down.png", "▼");
+        JButton duplicateBtn = createLayerButton("Duplicate Selected Layer", "/img/ui/layer-duplicate.png", "❏");
+        JButton editBtn = createLayerButton("Edit Layer Name", "/img/ui/layer-edit.png", "✎");
+        JButton deleteBtn = createLayerButton("Delete Layer", "/img/ui/layer-delete.png", "🗑");
+        JButton clearBtn = createLayerButton("Clear All Layers", "/img/ui/layer-clear.png", "✕");
 
         layersList.addListSelectionListener(new ListSelectionListener() {
             @Override
@@ -302,17 +303,17 @@ public class ToolboxFrame extends JFrame {
                     int selectedIndex = layersList.getSelectedIndex();
                     boolean isSelected = selectedIndex != -1;
                     
-                    // Ensure buttons are initialized before accessing
-                    if (editBtn != null) editBtn.setEnabled(isSelected);
-                    if (deleteBtn != null) deleteBtn.setEnabled(isSelected);
-                    if (duplicateBtn != null) duplicateBtn.setEnabled(isSelected);
+                    editBtn.setEnabled(isSelected);
+                    deleteBtn.setEnabled(isSelected);
+                    duplicateBtn.setEnabled(isSelected);
+                    clearBtn.setEnabled(!layersModel.isEmpty());
 
                     if (isSelected) {
-                        if (upBtn != null) upBtn.setEnabled(selectedIndex > 0);
-                        if (downBtn != null) downBtn.setEnabled(selectedIndex < layersModel.getSize() - 1);
+                        upBtn.setEnabled(selectedIndex > 0);
+                        downBtn.setEnabled(selectedIndex < layersModel.getSize() - 1);
                     } else {
-                        if (upBtn != null) upBtn.setEnabled(false);
-                        if (downBtn != null) downBtn.setEnabled(false);
+                        upBtn.setEnabled(false);
+                        downBtn.setEnabled(false);
                     }
                     // Notify Main frame of selection change
                     if (mainFrame != null) {
@@ -327,11 +328,6 @@ public class ToolboxFrame extends JFrame {
 
         // Layer controls
         JPanel layerBtns = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
-        upBtn.setToolTipText("Move Layer Up");
-        downBtn.setToolTipText("Move Layer Down");
-        duplicateBtn.setToolTipText("Duplicate Selected Layer");
-        editBtn.setToolTipText("Edit Layer Name");
-        deleteBtn.setToolTipText("Delete Layer");
 
         // Initially disable buttons that require selection
         editBtn.setEnabled(false);
@@ -339,6 +335,7 @@ public class ToolboxFrame extends JFrame {
         upBtn.setEnabled(false);
         downBtn.setEnabled(false);
         duplicateBtn.setEnabled(false);
+        clearBtn.setEnabled(false);
 
         duplicateBtn.addActionListener(e -> { // Changed from addBtn
             int selectedIndex = layersList.getSelectedIndex();
@@ -430,11 +427,25 @@ public class ToolboxFrame extends JFrame {
             }
         });
 
+        clearBtn.addActionListener(e -> {
+            if (!layersModel.isEmpty()) {
+                int confirm = JOptionPane.showConfirmDialog(ToolboxFrame.this,
+                        "Are you sure you want to clear all layers?",
+                        "Clear All Layers",
+                        JOptionPane.YES_NO_OPTION);
+                if (confirm == JOptionPane.YES_OPTION) {
+                    if (mainFrame != null) mainFrame.clearPaintElements();
+                    logger.info("Cleared all layers");
+                }
+            }
+        });
+
         layerBtns.add(upBtn);
         layerBtns.add(downBtn);
         layerBtns.add(duplicateBtn);
         layerBtns.add(editBtn);
         layerBtns.add(deleteBtn);
+        layerBtns.add(clearBtn);
         layersPanel.add(layerBtns);
         controlsPanel.add(layersPanel, gbc);
 
@@ -769,18 +780,35 @@ public class ToolboxFrame extends JFrame {
         }
     }
 
-    private JToggleButton createToolButton(String tooltip, String iconPath, ToolType toolType) { // Changed return type to JToggleButton
-        JToggleButton button = new JToggleButton(); // Changed JButton to JToggleButton
+    private JButton createLayerButton(String tooltip, String iconPath, String fallbackText) {
+        JButton button = new JButton();
         button.setToolTipText(tooltip);
+        button.setFocusable(false);
         try {
-            ImageIcon icon = new ImageIcon(getClass().getResource(iconPath));
-            button.setIcon(icon);
-        } catch (NullPointerException e) {
-            logger.info("Icon not found: " + iconPath);
-            button.setText(tooltip.substring(0, Math.min(tooltip.length(), 3))); // Fallback text
+            java.net.URL resource = getClass().getResource(iconPath);
+            if (resource != null) {
+                button.setIcon(new ImageIcon(resource));
+            } else {
+                button.setText(fallbackText);
+            }
+        } catch (Exception e) {
+            button.setText(fallbackText);
+        }
+        return button;
+    }
+
+    private JToggleButton createToolButton(String tooltip, String iconPath, ToolType toolType) {
+        JToggleButton button = new JToggleButton();
+        button.setToolTipText(tooltip);
+        button.setFocusable(false);
+        java.net.URL resource = getClass().getResource(iconPath);
+        if (resource != null) {
+            button.setIcon(new ImageIcon(resource));
+        } else {
+            logger.warn("Icon not found: {}", iconPath);
+            button.setText(tooltip.substring(0, Math.min(tooltip.length(), 3)));
         }
         button.addActionListener(e -> setSelectedTool(toolType));
-        button.setFocusable(false); // Prevent focus highlight interfering with selection highlight
         return button;
     }
 
@@ -868,11 +896,6 @@ public class ToolboxFrame extends JFrame {
         return layersList;
     }
 
-    // Method to add a layer name to the top of the JList
-    public void addLayerToTopList(String layerName) {
-        layersModel.add(0, layerName);
-    }
-
     // Method to update the entire layers list from a list of names
     public void updateLayersList(java.util.List<String> layerNames) {
         layersModel.clear();
@@ -930,7 +953,7 @@ public class ToolboxFrame extends JFrame {
 
     private String stripLayerIndexPrefix(String label) {
         if (label == null) return "";
-        return label.replaceFirst("^\\\\[\\\\d+\\\\]\\\\s*", "").trim();
+        return label.replaceFirst("^\\[\\d+\\]\\s*", "").trim();
     }
 
     public void moveLayerToTopInList(int oldIndex) {
@@ -996,18 +1019,6 @@ public class ToolboxFrame extends JFrame {
 
     public int getArcHeight() { // Added getter
         return arcHeight;
-    }
-
-    // Getter for the text input field's current text
-    public String getTextInput() {
-        return currentText; // Assuming currentText is updated by the JTextField's DocumentListener
-    }
-
-    // Getter for the currently selected font object
-    public Font getSelectedFont() {
-        // Ensure currentFont is up-to-date before returning
-        // updateCurrentFont(); // This might be redundant if called frequently, ensure it's efficient or called only when necessary
-        return currentFont;
     }
 
     public int getCurrentFontSize() {
