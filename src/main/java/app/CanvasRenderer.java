@@ -7,7 +7,9 @@ import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.Stroke;
+import java.awt.geom.GeneralPath;
 import java.awt.image.BufferedImage;
+import java.util.ArrayList;
 import java.util.List;
 
 import paintcomponents.PaintElement;
@@ -31,7 +33,10 @@ public class CanvasRenderer {
             Point endPoint,
             Rectangle currentDrawingRectangle,
             boolean isDrawingPolygon,
-            List<Point> currentPolygonPoints) {
+            List<Point> currentPolygonPoints,
+            List<Point> currentFreehandPoints,
+            boolean isDrawingBezier,
+            List<Point> currentBezierPoints) {
 
         if (antiAliasingActive) {
             g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
@@ -173,6 +178,82 @@ public class CanvasRenderer {
                 g2d.drawLine(prevPoint.x, prevPoint.y, endPoint.x, endPoint.y);
             }
         }
+
+        // Freehand in-progress preview
+        if (currentFreehandPoints != null && currentFreehandPoints.size() >= 2 && toolboxFrame != null
+                && toolboxFrame.getSelectedTool() == ToolboxFrame.ToolType.FREEHAND) {
+            Color strokeColor = toolboxFrame.isStrokeEnabled() ? toolboxFrame.getStrokeColor() : Color.BLACK;
+            float strokeWidth = (float) toolboxFrame.getCurrentStrokeWidth();
+            g2d.setColor(strokeColor);
+            g2d.setStroke(new BasicStroke(strokeWidth, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            GeneralPath previewPath = new GeneralPath();
+            Point fp = currentFreehandPoints.get(0);
+            previewPath.moveTo(fp.x, fp.y);
+            for (int i = 1; i < currentFreehandPoints.size(); i++) {
+                Point fp2 = currentFreehandPoints.get(i);
+                previewPath.lineTo(fp2.x, fp2.y);
+            }
+            g2d.draw(previewPath);
+        }
+
+        // Bezier in-progress preview
+        if (isDrawingBezier && currentBezierPoints != null && !currentBezierPoints.isEmpty() && toolboxFrame != null) {
+            Color strokeColor = toolboxFrame.isStrokeEnabled() ? toolboxFrame.getStrokeColor() : Color.GRAY;
+            float strokeWidth = (float) toolboxFrame.getCurrentStrokeWidth();
+
+            // Build preview list: placed anchors + live mouse position as tentative next point
+            List<Point> previewPoints = new ArrayList<>(currentBezierPoints);
+            if (endPoint != null) {
+                previewPoints.add(endPoint);
+            }
+
+            if (previewPoints.size() >= 2) {
+                g2d.setColor(strokeColor);
+                g2d.setStroke(new BasicStroke(strokeWidth, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                g2d.draw(buildCatmullRomPath(previewPoints, 0, 0));
+            } else if (endPoint != null) {
+                // Only one placed point — dashed line to mouse
+                Stroke oldStroke = g2d.getStroke();
+                float[] dash = {4f, 4f};
+                g2d.setColor(Color.GRAY);
+                g2d.setStroke(new BasicStroke(1f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10f, dash, 0f));
+                Point sole = currentBezierPoints.get(0);
+                g2d.drawLine(sole.x, sole.y, endPoint.x, endPoint.y);
+                g2d.setStroke(oldStroke);
+            }
+
+            // Draw anchor dots for placed points
+            for (int i = 0; i < currentBezierPoints.size(); i++) {
+                Point bp = currentBezierPoints.get(i);
+                if (i == 0) {
+                    g2d.setColor(Color.GREEN);
+                    g2d.fillOval(bp.x - 4, bp.y - 4, 8, 8);
+                } else {
+                    g2d.setColor(Color.BLUE);
+                    g2d.fillOval(bp.x - 3, bp.y - 3, 6, 6);
+                }
+            }
+        }
+    }
+
+    private static GeneralPath buildCatmullRomPath(List<Point> pts, int dx, int dy) {
+        GeneralPath path = new GeneralPath();
+        if (pts.size() < 2) return path;
+        int n = pts.size();
+        Point first = pts.get(0);
+        path.moveTo(first.x + dx, first.y + dy);
+        for (int i = 0; i < n - 1; i++) {
+            Point p0 = pts.get(Math.max(0, i - 1));
+            Point p1 = pts.get(i);
+            Point p2 = pts.get(i + 1);
+            Point p3 = pts.get(Math.min(n - 1, i + 2));
+            double cp1x = p1.x + (p2.x - p0.x) / 6.0;
+            double cp1y = p1.y + (p2.y - p0.y) / 6.0;
+            double cp2x = p2.x - (p3.x - p1.x) / 6.0;
+            double cp2y = p2.y - (p3.y - p1.y) / 6.0;
+            path.curveTo(cp1x + dx, cp1y + dy, cp2x + dx, cp2y + dy, p2.x + dx, p2.y + dy);
+        }
+        return path;
     }
 
     private void drawResizeHandles(Graphics2D g2d, Rectangle bounds) {

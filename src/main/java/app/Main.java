@@ -268,6 +268,8 @@ public class Main extends JFrame {
             case CIRCLE:
             case LINE:
             case POLYGON:
+            case FREEHAND:
+            case BEZIER:
             case TEXT:
             case IMAGE_URL:
             case IMAGE_LOCAL:

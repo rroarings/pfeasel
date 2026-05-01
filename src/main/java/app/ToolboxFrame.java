@@ -23,7 +23,7 @@ public class ToolboxFrame extends JFrame {
     private static final Logger logger = LoggerFactory.getLogger(ToolboxFrame.class);
     // Define an enum for the tools
     public enum ToolType {
-        SELECT, TEXT, RECTANGLE, ROUND_RECTANGLE, CIRCLE, LINE, POLYGON, IMAGE_URL, IMAGE_LOCAL, MOVE // Added SELECT
+        SELECT, TEXT, RECTANGLE, ROUND_RECTANGLE, CIRCLE, LINE, POLYGON, FREEHAND, BEZIER, IMAGE_URL, IMAGE_LOCAL, MOVE
     }
 
     private ToolType selectedTool = ToolType.SELECT; // Default tool changed to SELECT
@@ -89,15 +89,17 @@ public class ToolboxFrame extends JFrame {
         sidebar.setPreferredSize(new Dimension(40, 0));
 
         // Tool buttons
-        JToggleButton textTool = createToolButton("Text", "/img/ui/material-symbols--font-download-outline-sharp.png", ToolType.TEXT);
-        JToggleButton rectTool = createToolButton("Rectangle", "/img/ui/material-symbols--rectangle-outline.png", ToolType.RECTANGLE);
-        JToggleButton roundRectTool = createToolButton("Rounded Rectangle", "/img/ui/material-symbols--rectangle-outline-rounded.png", ToolType.ROUND_RECTANGLE);
-        JToggleButton circleTool = createToolButton("Circle", "/img/ui/material-symbols--circle-outline.png", ToolType.CIRCLE);
-        JToggleButton lineTool = createToolButton("Line", "/img/ui/material-symbols--line-end.png", ToolType.LINE);
-        JToggleButton polygonTool = createToolButton("Polygon", "/img/ui/uil--polygon.png", ToolType.POLYGON);
-        JToggleButton imageUrlTool = createToolButton("Image URL", "/img/ui/material-symbols--image.png", ToolType.IMAGE_URL);
-        JToggleButton imageLocalTool = createToolButton("Local Image", "/img/ui/material-symbols-light--image-search.png", ToolType.IMAGE_LOCAL);
-        JToggleButton moveTool = createToolButton("Move", "/img/ui/mdi--cursor-move.png", ToolType.MOVE);
+        JToggleButton textTool = createToolButton("Text", "/img/ui/text.png", ToolType.TEXT);
+        JToggleButton rectTool = createToolButton("Rectangle", "/img/ui/rectangle.png", ToolType.RECTANGLE);
+        JToggleButton roundRectTool = createToolButton("Rounded Rectangle", "/img/ui/rectangle-rounded.png", ToolType.ROUND_RECTANGLE);
+        JToggleButton circleTool = createToolButton("Circle", "/img/ui/circle.png", ToolType.CIRCLE);
+        JToggleButton lineTool = createToolButton("Line", "/img/ui/line.png", ToolType.LINE);
+        JToggleButton polygonTool = createToolButton("Polygon", "/img/ui/polygon.png", ToolType.POLYGON);
+        JToggleButton imageUrlTool = createToolButton("Image URL", "/img/ui/image.png", ToolType.IMAGE_URL);
+        JToggleButton imageLocalTool = createToolButton("Local Image", "/img/ui/image-search.png", ToolType.IMAGE_LOCAL);
+        JToggleButton moveTool = createToolButton("Move", "/img/ui/cursor-move.png", ToolType.MOVE);
+        JToggleButton freehandTool = createToolButton("Freehand", "/img/ui/pen.png", ToolType.FREEHAND);
+        JToggleButton bezierTool = createToolButton("Bezier Curve", "/img/ui/bezier-curve.png", ToolType.BEZIER);
 
         // Add tool buttons to sidebar
         registerToolButton(sidebar, ToolType.TEXT, textTool);
@@ -106,6 +108,8 @@ public class ToolboxFrame extends JFrame {
         registerToolButton(sidebar, ToolType.CIRCLE, circleTool);
         registerToolButton(sidebar, ToolType.LINE, lineTool);
         registerToolButton(sidebar, ToolType.POLYGON, polygonTool);
+        registerToolButton(sidebar, ToolType.FREEHAND, freehandTool);
+        registerToolButton(sidebar, ToolType.BEZIER, bezierTool);
         registerToolButton(sidebar, ToolType.IMAGE_URL, imageUrlTool);
         registerToolButton(sidebar, ToolType.IMAGE_LOCAL, imageLocalTool);
         registerToolButton(sidebar, ToolType.MOVE, moveTool);
