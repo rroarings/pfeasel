@@ -3,7 +3,12 @@ package app;
 import java.awt.Cursor;
 import java.awt.Point;
 import java.awt.Rectangle;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import javax.swing.JPanel;
 
@@ -16,7 +21,9 @@ public class DrawingController {
     private final Main host;
 
     private Point dragOffset;
+    private final Map<PaintElement, Point> dragOffsets = new HashMap<>();
     private PaintElement selectedElementForMove;
+    private final Set<PaintElement> selectedElements = new LinkedHashSet<>();
     private ResizeHandle activeResizeHandle = ResizeHandle.NONE;
     private Rectangle resizeStartBounds;
     private boolean minSizeReachedDuringResize;
@@ -41,7 +48,48 @@ public class DrawingController {
         return selectedElementForMove;
     }
 
+    public List<PaintElement> getSelectedElements() {
+        return new ArrayList<>(selectedElements);
+    }
+
+    public void selectSingleElement(PaintElement element) {
+        setSingleSelection(element);
+    }
+
+    public void setSelection(List<PaintElement> elements, PaintElement primaryElement) {
+        selectedElements.clear();
+        if (elements != null) {
+            for (PaintElement element : elements) {
+                if (element != null) {
+                    selectedElements.add(element);
+                }
+            }
+        }
+
+        if (primaryElement != null && selectedElements.contains(primaryElement)) {
+            selectedElementForMove = primaryElement;
+        } else {
+            syncPrimarySelection();
+        }
+    }
+
+    public void pruneSelection(List<PaintElement> currentElements) {
+        if (currentElements == null) {
+            selectedElements.clear();
+            dragOffsets.clear();
+            selectedElementForMove = null;
+            activeResizeHandle = ResizeHandle.NONE;
+            resizeStartBounds = null;
+            dragOffset = null;
+            return;
+        }
+        selectedElements.removeIf(e -> e == null || !currentElements.contains(e));
+        syncPrimarySelection();
+    }
+
     public void clearSelection(JPanel panel) {
+        selectedElements.clear();
+        dragOffsets.clear();
         selectedElementForMove = null;
         activeResizeHandle = ResizeHandle.NONE;
         resizeStartBounds = null;
@@ -59,7 +107,10 @@ public class DrawingController {
             return;
         }
 
-        if (activeResizeHandle != ResizeHandle.NONE && resizeStartBounds != null && selectedElementForMove.isResizable()) {
+        if (selectedElements.size() == 1
+                && activeResizeHandle != ResizeHandle.NONE
+                && resizeStartBounds != null
+                && selectedElementForMove.isResizable()) {
             Point resizePoint = currentPoint;
             if (host.isSnapToGridActive() && host.getGridManager().isGridVisible()) {
                 resizePoint = snapPointToGrid(resizePoint);
@@ -73,27 +124,35 @@ public class DrawingController {
             return;
         }
 
-        if (dragOffset != null) {
-            int newX = currentPoint.x - dragOffset.x;
-            int newY = currentPoint.y - dragOffset.y;
+        if (!dragOffsets.isEmpty()) {
+            for (PaintElement element : selectedElements) {
+                Point offset = dragOffsets.get(element);
+                if (offset == null) {
+                    continue;
+                }
 
-            if (host.isSnapToGridActive() && host.getGridManager().isGridVisible()) {
-                Point snappedPosition = snapPointToGrid(new Point(newX, newY));
-                selectedElementForMove.setPosition(snappedPosition.x, snappedPosition.y);
-            } else {
-                selectedElementForMove.setPosition(newX, newY);
+                int newX = currentPoint.x - offset.x;
+                int newY = currentPoint.y - offset.y;
+
+                if (host.isSnapToGridActive() && host.getGridManager().isGridVisible()) {
+                    Point snappedPosition = snapPointToGrid(new Point(newX, newY));
+                    element.setPosition(snappedPosition.x, snappedPosition.y);
+                } else {
+                    element.setPosition(newX, newY);
+                }
             }
             host.repaintDrawingPanel();
         }
     }
 
-    public void handleMousePressed(Point currentPoint, JPanel panel) {
+    public void handleMousePressed(Point currentPoint, JPanel panel, boolean ctrlDown) {
         activeResizeHandle = ResizeHandle.NONE;
         resizeStartBounds = null;
         dragOffset = null;
+        dragOffsets.clear();
         minSizeReachedDuringResize = false;
 
-        if (selectedElementForMove != null && selectedElementForMove.isResizable()) {
+        if (selectedElements.size() == 1 && selectedElementForMove != null && selectedElementForMove.isResizable()) {
             Rectangle selectedBounds = selectedElementForMove.getBounds();
             ResizeHandle clickedHandle = getResizeHandleAtPoint(currentPoint, selectedBounds);
             if (clickedHandle != ResizeHandle.NONE) {
@@ -108,20 +167,26 @@ public class DrawingController {
         List<PaintElement> paintElements = host.getPaintElements();
         PaintElement hitElement = findTopmostElementAt(currentPoint, paintElements);
         if (hitElement != null) {
-            selectedElementForMove = hitElement;
-            Point elementPos = selectedElementForMove.getPosition();
-            dragOffset = new Point(currentPoint.x - elementPos.x, currentPoint.y - elementPos.y);
-
-            ToolboxFrame toolbox = host.getToolboxFrame();
-            if (toolbox != null) {
-                int hitIndex = paintElements.indexOf(hitElement);
-                if (hitIndex >= 0) {
-                    int layerIndex = paintElements.size() - 1 - hitIndex;
-                    toolbox.selectLayerInList(layerIndex);
-                }
+            if (ctrlDown) {
+                toggleSelection(hitElement);
+                host.syncLayerSelectionWithCanvasSelection();
+                host.repaintDrawingPanel();
+                return;
             }
+
+            if (selectedElements.contains(hitElement)) {
+                selectedElementForMove = hitElement;
+            } else {
+                setSingleSelection(hitElement);
+            }
+
+            initializeGroupDragOffsets(currentPoint);
+            host.syncLayerSelectionWithCanvasSelection();
         } else {
-            selectedElementForMove = null;
+            if (!ctrlDown) {
+                setSingleSelection(null);
+                host.syncLayerSelectionWithCanvasSelection();
+            }
         }
         host.repaintDrawingPanel();
     }
@@ -141,18 +206,26 @@ public class DrawingController {
             return;
         }
 
-        if (selectedElementForMove != null && dragOffset != null) {
-            int newX = currentPoint.x - dragOffset.x;
-            int newY = currentPoint.y - dragOffset.y;
-            Point finalElementPos = new Point(newX, newY);
+        if (!dragOffsets.isEmpty()) {
+            for (PaintElement element : selectedElements) {
+                Point offset = dragOffsets.get(element);
+                if (offset == null) {
+                    continue;
+                }
 
-            if (host.isSnapToGridActive() && host.getGridManager().isGridVisible()) {
-                finalElementPos = snapPointToGrid(finalElementPos);
+                int newX = currentPoint.x - offset.x;
+                int newY = currentPoint.y - offset.y;
+                Point finalElementPos = new Point(newX, newY);
+
+                if (host.isSnapToGridActive() && host.getGridManager().isGridVisible()) {
+                    finalElementPos = snapPointToGrid(finalElementPos);
+                }
+                element.setPosition(finalElementPos.x, finalElementPos.y);
             }
-            selectedElementForMove.setPosition(finalElementPos.x, finalElementPos.y);
         }
 
         dragOffset = null;
+        dragOffsets.clear();
         updateMoveCursor(currentPoint, panel);
         host.repaintDrawingPanel();
     }
@@ -301,7 +374,7 @@ public class DrawingController {
             return;
         }
 
-        if (selectedElementForMove != null && selectedElementForMove.isResizable()) {
+        if (selectedElements.size() == 1 && selectedElementForMove != null && selectedElementForMove.isResizable()) {
             Rectangle bounds = selectedElementForMove.getBounds();
             ResizeHandle hoverHandle = getResizeHandleAtPoint(point, bounds);
             if (hoverHandle != ResizeHandle.NONE) {
@@ -316,5 +389,56 @@ public class DrawingController {
         } else {
             panel.setCursor(Cursor.getDefaultCursor());
         }
+    }
+
+    private void setSingleSelection(PaintElement element) {
+        selectedElements.clear();
+        if (element != null) {
+            selectedElements.add(element);
+        }
+        syncPrimarySelection();
+    }
+
+    private void toggleSelection(PaintElement element) {
+        if (element == null) {
+            return;
+        }
+
+        if (selectedElements.contains(element)) {
+            selectedElements.remove(element);
+        } else {
+            selectedElements.add(element);
+            selectedElementForMove = element;
+        }
+        syncPrimarySelection();
+    }
+
+    private void initializeGroupDragOffsets(Point currentPoint) {
+        dragOffsets.clear();
+        for (PaintElement element : selectedElements) {
+            Point elementPos = element.getPosition();
+            dragOffsets.put(element, new Point(currentPoint.x - elementPos.x, currentPoint.y - elementPos.y));
+        }
+
+        if (selectedElementForMove != null) {
+            Point primaryPos = selectedElementForMove.getPosition();
+            dragOffset = new Point(currentPoint.x - primaryPos.x, currentPoint.y - primaryPos.y);
+        }
+    }
+
+    private void syncPrimarySelection() {
+        if (selectedElements.isEmpty()) {
+            selectedElementForMove = null;
+            activeResizeHandle = ResizeHandle.NONE;
+            resizeStartBounds = null;
+            dragOffset = null;
+            dragOffsets.clear();
+            return;
+        }
+
+        if (selectedElementForMove != null && selectedElements.contains(selectedElementForMove)) {
+            return;
+        }
+        selectedElementForMove = selectedElements.iterator().next();
     }
 }

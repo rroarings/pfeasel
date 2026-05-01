@@ -120,7 +120,7 @@ public class DrawingPanel extends JPanel {
                 Point currentPoint = e.getPoint();
 
                 if (selectedTool == ToolboxFrame.ToolType.MOVE) {
-                    drawingController.handleMousePressed(currentPoint, DrawingPanel.this);
+                    drawingController.handleMousePressed(currentPoint, DrawingPanel.this, e.isControlDown());
                     return;
                 }
 
@@ -412,6 +412,7 @@ public class DrawingPanel extends JPanel {
                 host.isAntiAliasingActive(),
                 host.isDrawRSInterfaceVisible(),
                 host.getRsInterfaceImage(),
+                drawingController.getSelectedElements(),
                 drawingController.getSelectedElementForMove(),
                 startPoint,
                 endPoint,
