@@ -9,6 +9,7 @@
       "mainClass": "app.Main",
       "projectName": "pfeasel-paint-creator",
       "cwd": "${workspaceFolder}",
+      "terminateDebuggee": true,
       "postDebugTask": "Kill PF Easel"
     }
   ]

@@ -7,6 +7,8 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.Rectangle;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
@@ -24,6 +26,7 @@ import paintcomponents.TextElement;
 
 public class DrawingPanel extends JPanel {
     private static final Logger logger = LoggerFactory.getLogger(DrawingPanel.class);
+    private static final int FREEHAND_MIN_DIST = 3;
 
     private final Main host;
     private final DrawingController drawingController;
@@ -36,6 +39,10 @@ public class DrawingPanel extends JPanel {
     private Rectangle currentDrawingRectangle;
     private final List<Point> currentPolygonPoints = new ArrayList<>();
     private boolean isDrawingPolygon = false;
+    private final List<Point> currentFreehandPoints = new ArrayList<>();
+    private boolean isDrawingFreehand = false;
+    private final List<Point> currentBezierPoints = new ArrayList<>();
+    private boolean isDrawingBezier = false;
 
     public DrawingPanel(Main host, DrawingController drawingController, CanvasRenderer canvasRenderer, ShapeCreationService shapeCreationService) {
         this.host = host;
@@ -61,7 +68,7 @@ public class DrawingPanel extends JPanel {
                     setCursor(java.awt.Cursor.getDefaultCursor());
                 }
 
-                if (selectedTool == ToolboxFrame.ToolType.POLYGON) {
+                if (selectedTool == ToolboxFrame.ToolType.POLYGON || selectedTool == ToolboxFrame.ToolType.BEZIER) {
                     endPoint = host.isSnapToGridActive() && host.getGridManager().isGridVisible()
                             ? snapPointToGrid(currentMousePoint)
                             : currentMousePoint;
@@ -90,6 +97,12 @@ public class DrawingPanel extends JPanel {
                         && dragStartPoint != null) {
                     currentDrawingRectangle = shapeCreationService.calculateBounds(dragStartPoint, endPoint);
                     repaint();
+                } else if (selectedTool == ToolboxFrame.ToolType.FREEHAND && isDrawingFreehand) {
+                    Point last = currentFreehandPoints.isEmpty() ? null : currentFreehandPoints.get(currentFreehandPoints.size() - 1);
+                    if (last == null || endPoint.distance(last) >= FREEHAND_MIN_DIST) {
+                        currentFreehandPoints.add(new Point(endPoint));
+                    }
+                    repaint();
                 }
             }
         });
@@ -111,6 +124,7 @@ public class DrawingPanel extends JPanel {
                     return;
                 }
 
+                requestFocusInWindow();
                 drawingController.clearSelection(DrawingPanel.this);
                 setCursor(java.awt.Cursor.getDefaultCursor());
 
@@ -127,6 +141,10 @@ public class DrawingPanel extends JPanel {
                         || selectedTool == ToolboxFrame.ToolType.CIRCLE) {
                     dragStartPoint = startPoint;
                     endPoint = startPoint;
+                } else if (selectedTool == ToolboxFrame.ToolType.FREEHAND) {
+                    isDrawingFreehand = true;
+                    currentFreehandPoints.clear();
+                    currentFreehandPoints.add(new Point(startPoint));
                 }
             }
 
@@ -143,6 +161,22 @@ public class DrawingPanel extends JPanel {
                 endPoint = host.isSnapToGridActive() && host.getGridManager().isGridVisible()
                         ? snapPointToGrid(e.getPoint())
                         : e.getPoint();
+
+                if (selectedTool == ToolboxFrame.ToolType.FREEHAND) {
+                    if (isDrawingFreehand && currentFreehandPoints.size() >= 2 && toolboxFrame != null) {
+                        PaintElement fe = shapeCreationService.createFreehandElement(currentFreehandPoints, toolboxFrame);
+                        fe.setShadow(toolboxFrame.isShadowEnabled());
+                        String uniqueDisplayName = host.generateUniqueDisplayName(fe.getName());
+                        fe.setDisplayName(uniqueDisplayName);
+                        host.addPaintElement(fe);
+                        host.setLastActionStatus("Drew " + uniqueDisplayName);
+                    }
+                    currentFreehandPoints.clear();
+                    isDrawingFreehand = false;
+                    startPoint = null;
+                    repaint();
+                    return;
+                }
 
                 if (startPoint == null) {
                     return;
@@ -211,6 +245,16 @@ public class DrawingPanel extends JPanel {
                     }
                 }
 
+                if (isDrawingBezier && selectedTool != ToolboxFrame.ToolType.BEZIER) {
+                    if (currentBezierPoints.size() >= 2) {
+                        finalizeBezier();
+                    } else {
+                        isDrawingBezier = false;
+                        currentBezierPoints.clear();
+                        repaint();
+                    }
+                }
+
                 if (selectedTool == ToolboxFrame.ToolType.TEXT) {
                     if (toolboxFrame == null) {
                         return;
@@ -256,6 +300,51 @@ public class DrawingPanel extends JPanel {
                         repaint();
                     }
                 }
+
+                if (selectedTool == ToolboxFrame.ToolType.BEZIER) {
+                    isDrawingBezier = true;
+                    if (e.getButton() == MouseEvent.BUTTON3) {
+                        // Right-click: finalize or cancel
+                        if (currentBezierPoints.size() >= 2) {
+                            finalizeBezier();
+                        } else {
+                            isDrawingBezier = false;
+                            currentBezierPoints.clear();
+                            endPoint = null;
+                            repaint();
+                        }
+                        return;
+                    }
+                    if (e.getButton() == MouseEvent.BUTTON1) {
+                        if (e.getClickCount() == 1) {
+                            currentBezierPoints.add(clickedPoint);
+                        } else if (e.getClickCount() == 2 && currentBezierPoints.size() >= 2) {
+                            finalizeBezier();
+                            return;
+                        }
+                        repaint();
+                    }
+                }
+            }
+        });
+        addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                logger.info("[KeyAdapter] keyPressed: code={} char='{}' isDrawingBezier={} isDrawingFreehand={}",
+                        e.getKeyCode(), e.getKeyChar(), isDrawingBezier, isDrawingFreehand);
+                if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {
+                    if (isDrawingBezier) {
+                        isDrawingBezier = false;
+                        currentBezierPoints.clear();
+                        endPoint = null;
+                        repaint();
+                    } else if (isDrawingFreehand) {
+                        isDrawingFreehand = false;
+                        currentFreehandPoints.clear();
+                        startPoint = null;
+                        repaint();
+                    }
+                }
             }
         });
     }
@@ -277,6 +366,26 @@ public class DrawingPanel extends JPanel {
 
         currentPolygonPoints.clear();
         isDrawingPolygon = false;
+        startPoint = null;
+        endPoint = null;
+        repaint();
+    }
+
+    private void finalizeBezier() {
+        if (currentBezierPoints.size() >= 2) {
+            ToolboxFrame toolboxFrame = host.getToolboxFrame();
+            if (toolboxFrame == null) {
+                return;
+            }
+            PaintElement bezier = shapeCreationService.createBezierElement(currentBezierPoints, toolboxFrame);
+            bezier.setShadow(toolboxFrame.isShadowEnabled());
+            String uniqueDisplayName = host.generateUniqueDisplayName(bezier.getName());
+            bezier.setDisplayName(uniqueDisplayName);
+            host.addPaintElement(bezier);
+            host.setLastActionStatus("Drew bezier curve '" + uniqueDisplayName + "' with " + currentBezierPoints.size() + " points");
+        }
+        currentBezierPoints.clear();
+        isDrawingBezier = false;
         startPoint = null;
         endPoint = null;
         repaint();
@@ -308,6 +417,9 @@ public class DrawingPanel extends JPanel {
                 endPoint,
                 currentDrawingRectangle,
                 isDrawingPolygon,
-                currentPolygonPoints);
+                currentPolygonPoints,
+                currentFreehandPoints,
+                isDrawingBezier,
+                currentBezierPoints);
     }
 }
