@@ -11,7 +11,7 @@ public class ElementService {
     }
 
     public int toPaintElementIndex(int paintElementCount, int toolboxIndex) {
-        return paintElementCount - 1 - toolboxIndex;
+        return toolboxIndex;
     }
 
     public void moveElement(List<PaintElement> elements, int fromIndex, int toIndex) {

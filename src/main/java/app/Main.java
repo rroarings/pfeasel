@@ -22,7 +22,9 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.net.URL;
 import org.slf4j.Logger;
@@ -331,16 +333,17 @@ public class Main extends JFrame {
     }
 
     public void updateToolboxLayerList() {
+        drawingController.pruneSelection(paintElements);
         if (toolboxFrame != null) {
             List<String> layerNames = paintElements.stream()
                                                  .map(this::getEffectiveDisplayName)
                                                  .collect(Collectors.toList());
             int size = layerNames.size();
             for (int i = 0; i < size; i++) {
-                layerNames.set(i, String.format("[%d] %s", size - 1 - i, layerNames.get(i)));
+                layerNames.set(i, String.format("[%d] %s", size - i, layerNames.get(i)));
             }
-            Collections.reverse(layerNames); // To display top layer at the top of the list
             toolboxFrame.updateLayersList(layerNames);
+            syncLayerSelectionWithCanvasSelection();
         }
     }
 
@@ -469,6 +472,38 @@ public class Main extends JFrame {
         }
     }
 
+    public void deletePaintElements(int[] selectedIndicesInListModel) {
+        if (selectedIndicesInListModel == null || selectedIndicesInListModel.length == 0) {
+            return;
+        }
+
+        int[] sortedDescending = java.util.Arrays.stream(selectedIndicesInListModel)
+                .distinct()
+                .boxed()
+                .sorted(java.util.Collections.reverseOrder())
+                .mapToInt(Integer::intValue)
+                .toArray();
+
+        int removedCount = 0;
+        for (int index : sortedDescending) {
+            if (index < 0 || index >= paintElements.size()) {
+                continue;
+            }
+
+            PaintElement removedElement = paintElements.get(index);
+            UndoableAction action = new DeleteElementAction(this, removedElement, index);
+            paintElements.remove(index);
+            addUndoableAction(action);
+            removedCount++;
+        }
+
+        if (removedCount > 0) {
+            updateToolboxLayerList();
+            repaintDrawingPanel();
+            setLastActionStatus("Deleted " + removedCount + " layer(s)");
+        }
+    }
+
     public void duplicatePaintElement(int selectedIndexInListModel) {
         logger.debug("duplicatePaintElement called with selectedIndexInListModel={}", selectedIndexInListModel);
         if (toolboxFrame == null || selectedIndexInListModel < 0 || selectedIndexInListModel >= toolboxFrame.getLayersListModel().getSize()) {
@@ -506,6 +541,55 @@ public class Main extends JFrame {
         repaintDrawingPanel();
         setLastActionStatus("Duplicated '" + uniqueDisplayName + "'");
         logger.info("Element '{}' duplicated as '{}' at offset ({}, {})", originalElement.getDisplayName(), uniqueDisplayName, offsetX, offsetY);
+    }
+
+    public void duplicatePaintElements(int[] selectedIndicesInListModel) {
+        if (selectedIndicesInListModel == null || selectedIndicesInListModel.length == 0) {
+            return;
+        }
+
+        int[] sortedAscending = java.util.Arrays.stream(selectedIndicesInListModel)
+                .distinct()
+                .sorted()
+                .toArray();
+
+        List<PaintElement> duplicates = new ArrayList<>();
+        for (int selectedIndex : sortedAscending) {
+            if (selectedIndex < 0 || selectedIndex >= paintElements.size()) {
+                continue;
+            }
+
+            PaintElement originalElement = paintElements.get(selectedIndex);
+            if (originalElement == null) {
+                continue;
+            }
+
+            PaintElement duplicatedElement = originalElement.duplicate();
+            if (duplicatedElement == null) {
+                continue;
+            }
+
+            Point originalPosition = duplicatedElement.getPosition();
+            int offsetX = 10;
+            int offsetY = 10;
+            duplicatedElement.setPosition(originalPosition.x + offsetX, originalPosition.y + offsetY);
+            String uniqueDisplayName = generateUniqueDisplayName(duplicatedElement.getName());
+            duplicatedElement.setDisplayName(uniqueDisplayName);
+            duplicates.add(duplicatedElement);
+        }
+
+        if (duplicates.isEmpty()) {
+            return;
+        }
+
+        paintElements.addAll(0, duplicates);
+
+        List<PaintElement> selectedDupes = new ArrayList<>(duplicates);
+        drawingController.setSelection(selectedDupes, selectedDupes.get(0));
+
+        updateToolboxLayerList();
+        repaintDrawingPanel();
+        setLastActionStatus("Duplicated " + duplicates.size() + " layer(s)");
     }
 
     public void updatePaintElementDisplayName(int listIndexInToolbox, String newDisplayName) {
@@ -570,6 +654,59 @@ public class Main extends JFrame {
             setLastActionStatus("Reordered layer: '" + element.getDisplayName() + "'");
         } else {
             logger.error("Main.moveLayerDown: Invalid index: " + listIndexInToolbox);
+        }
+    }
+
+    public void moveLayersUp(int[] selectedIndicesInListModel) {
+        if (selectedIndicesInListModel == null || selectedIndicesInListModel.length == 0) {
+            return;
+        }
+
+        java.util.Set<Integer> selectedSet = java.util.Arrays.stream(selectedIndicesInListModel)
+                .boxed()
+                .collect(Collectors.toSet());
+        int[] sortedAscending = selectedSet.stream().sorted().mapToInt(Integer::intValue).toArray();
+
+        boolean moved = false;
+        for (int index : sortedAscending) {
+            if (index > 0 && !selectedSet.contains(index - 1)) {
+                Collections.swap(paintElements, index, index - 1);
+                moved = true;
+            }
+        }
+
+        if (moved) {
+            updateToolboxLayerList();
+            repaintDrawingPanel();
+            setLastActionStatus("Moved selection up");
+        }
+    }
+
+    public void moveLayersDown(int[] selectedIndicesInListModel) {
+        if (selectedIndicesInListModel == null || selectedIndicesInListModel.length == 0) {
+            return;
+        }
+
+        java.util.Set<Integer> selectedSet = java.util.Arrays.stream(selectedIndicesInListModel)
+                .boxed()
+                .collect(Collectors.toSet());
+        int[] sortedDescending = selectedSet.stream()
+                .sorted(Collections.reverseOrder())
+                .mapToInt(Integer::intValue)
+                .toArray();
+
+        boolean moved = false;
+        for (int index : sortedDescending) {
+            if (index < paintElements.size() - 1 && !selectedSet.contains(index + 1)) {
+                Collections.swap(paintElements, index, index + 1);
+                moved = true;
+            }
+        }
+
+        if (moved) {
+            updateToolboxLayerList();
+            repaintDrawingPanel();
+            setLastActionStatus("Moved selection down");
         }
     }
 
@@ -732,6 +869,43 @@ public class Main extends JFrame {
         return paintElements;
     }
 
+    public List<PaintElement> getSelectedPaintElements() {
+        return drawingController.getSelectedElements();
+    }
+
+    public PaintElement getPrimarySelectedPaintElement() {
+        return drawingController.getSelectedElementForMove();
+    }
+
+    public void syncLayerSelectionWithCanvasSelection() {
+        if (toolboxFrame == null) {
+            return;
+        }
+
+        List<PaintElement> selected = drawingController.getSelectedElements();
+        PaintElement primary = drawingController.getSelectedElementForMove();
+
+        if (selected.isEmpty()) {
+            toolboxFrame.clearLayerSelection();
+            return;
+        }
+
+        List<Integer> selectedPaintIndices = new ArrayList<>();
+        for (PaintElement element : selected) {
+            int idx = paintElements.indexOf(element);
+            if (idx >= 0) {
+                selectedPaintIndices.add(idx);
+            }
+        }
+
+        int primaryIndex = paintElements.indexOf(primary);
+        if (primaryIndex < 0 && !selectedPaintIndices.isEmpty()) {
+            primaryIndex = selectedPaintIndices.get(0);
+        }
+
+        toolboxFrame.selectLayersInList(selectedPaintIndices, primaryIndex);
+    }
+
     // Add this stub for MoveElementAction (returns null for now, or implement selection logic if needed)
     public PaintElement getCurrentlySelectedElementInList() {
         // If you have a selection model in ToolboxFrame, return the selected element here
@@ -754,8 +928,29 @@ public class Main extends JFrame {
     }
 
     // For ToolboxFrame
-    public void handleLayerSelectionChanged(int selectedIndex) {
-        // Optionally, update UI or selection state. No-op stub for now.
+    public void handleLayerSelectionChanged(int[] selectedIndices, int leadIndex) {
+        if (selectedIndices == null || selectedIndices.length == 0) {
+            drawingController.clearSelection(drawingPanel);
+            repaintDrawingPanel();
+            return;
+        }
+
+        Set<PaintElement> orderedSelected = new LinkedHashSet<>();
+        for (int selectedIndex : selectedIndices) {
+            int paintElementIndex = selectedIndex;
+            if (paintElementIndex >= 0 && paintElementIndex < paintElements.size()) {
+                orderedSelected.add(paintElements.get(paintElementIndex));
+            }
+        }
+
+        int primaryPaintElementIndex = leadIndex;
+        PaintElement primary = null;
+        if (primaryPaintElementIndex >= 0 && primaryPaintElementIndex < paintElements.size()) {
+            primary = paintElements.get(primaryPaintElementIndex);
+        }
+
+        drawingController.setSelection(new ArrayList<>(orderedSelected), primary);
+        repaintDrawingPanel();
     }
 
     public void updateFrameTitle() {

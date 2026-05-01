@@ -28,6 +28,7 @@ public class CanvasRenderer {
             boolean antiAliasingActive,
             boolean rsInterfaceVisible,
             BufferedImage rsInterfaceImage,
+            List<PaintElement> selectedElements,
             PaintElement selectedElementForMove,
             Point startPoint,
             Point endPoint,
@@ -64,17 +65,30 @@ public class CanvasRenderer {
             }
         }
 
-        if (toolboxFrame != null && toolboxFrame.getSelectedTool() == ToolboxFrame.ToolType.MOVE && selectedElementForMove != null) {
-            Rectangle bounds = selectedElementForMove.getBounds();
-            if (bounds != null) {
-                g2d.setColor(Color.BLUE);
-                float[] dash = {4f, 4f};
-                Stroke oldStroke = g2d.getStroke();
-                g2d.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10f, dash, 0f));
-                g2d.drawRect(bounds.x - 2, bounds.y - 2, bounds.width + 4, bounds.height + 4);
-                g2d.setStroke(oldStroke);
+        if (selectedElements != null && !selectedElements.isEmpty()) {
+            g2d.setColor(Color.BLUE);
+            float[] dash = {4f, 4f};
+            Stroke oldStroke = g2d.getStroke();
+            g2d.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10f, dash, 0f));
 
-                if (selectedElementForMove.isResizable() && bounds.width > 0 && bounds.height > 0) {
+            for (PaintElement selectedElement : selectedElements) {
+                if (selectedElement == null) {
+                    continue;
+                }
+                Rectangle bounds = selectedElement.getBounds();
+                if (bounds != null) {
+                    g2d.drawRect(bounds.x - 2, bounds.y - 2, bounds.width + 4, bounds.height + 4);
+                }
+            }
+
+            g2d.setStroke(oldStroke);
+
+            if (toolboxFrame != null
+                    && toolboxFrame.getSelectedTool() == ToolboxFrame.ToolType.MOVE
+                    && selectedElements.size() == 1
+                    && selectedElementForMove != null) {
+                Rectangle bounds = selectedElementForMove.getBounds();
+                if (selectedElementForMove.isResizable() && bounds != null && bounds.width > 0 && bounds.height > 0) {
                     drawResizeHandles(g2d, bounds);
                 }
             }

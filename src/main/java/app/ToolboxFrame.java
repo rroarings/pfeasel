@@ -40,6 +40,7 @@ public class ToolboxFrame extends JFrame {
 
     private DefaultListModel<String> layersModel = new DefaultListModel<>();
     private JList<String> layersList; // Made layersList a field to access it for selection
+    private boolean suppressLayerSelectionEvents = false;
 
     // Fields for remaining controls
     private boolean isFillEnabled = true;
@@ -287,7 +288,7 @@ public class ToolboxFrame extends JFrame {
         layersPanel.setLayout(new BoxLayout(layersPanel, BoxLayout.Y_AXIS));
         layersPanel.setBorder(BorderFactory.createTitledBorder("Layers:"));
         layersList = new JList<>(layersModel);
-        layersList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION); // Ensure single selection
+        layersList.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         // Initialize buttons here so the listener can access them
         JButton upBtn = createLayerButton("Move Layer Up", "/img/ui/layer-up.png", "▲");
         JButton downBtn = createLayerButton("Move Layer Down", "/img/ui/layer-down.png", "▼");
@@ -299,25 +300,37 @@ public class ToolboxFrame extends JFrame {
         layersList.addListSelectionListener(new ListSelectionListener() {
             @Override
             public void valueChanged(ListSelectionEvent e) {
-                if (!e.getValueIsAdjusting()) {
-                    int selectedIndex = layersList.getSelectedIndex();
-                    boolean isSelected = selectedIndex != -1;
-                    
-                    editBtn.setEnabled(isSelected);
-                    deleteBtn.setEnabled(isSelected);
-                    duplicateBtn.setEnabled(isSelected);
+                if (!e.getValueIsAdjusting() && !suppressLayerSelectionEvents) {
+                    int[] selectedIndices = layersList.getSelectedIndices();
+                    int selectedCount = selectedIndices.length;
+                    boolean anySelected = selectedCount > 0;
+                    boolean singleSelected = selectedCount == 1;
+
+                    editBtn.setEnabled(singleSelected);
+                    deleteBtn.setEnabled(anySelected);
+                    duplicateBtn.setEnabled(anySelected);
                     clearBtn.setEnabled(!layersModel.isEmpty());
 
-                    if (isSelected) {
-                        upBtn.setEnabled(selectedIndex > 0);
-                        downBtn.setEnabled(selectedIndex < layersModel.getSize() - 1);
+                    if (anySelected) {
+                        boolean canMoveUp = false;
+                        boolean canMoveDown = false;
+                        for (int selectedIndex : selectedIndices) {
+                            if (selectedIndex > 0) {
+                                canMoveUp = true;
+                            }
+                            if (selectedIndex < layersModel.getSize() - 1) {
+                                canMoveDown = true;
+                            }
+                        }
+                        upBtn.setEnabled(canMoveUp);
+                        downBtn.setEnabled(canMoveDown);
                     } else {
                         upBtn.setEnabled(false);
                         downBtn.setEnabled(false);
                     }
-                    // Notify Main frame of selection change
+
                     if (mainFrame != null) {
-                        mainFrame.handleLayerSelectionChanged(selectedIndex);
+                        mainFrame.handleLayerSelectionChanged(selectedIndices, layersList.getLeadSelectionIndex());
                     }
                 }
             }
@@ -338,12 +351,9 @@ public class ToolboxFrame extends JFrame {
         clearBtn.setEnabled(false);
 
         duplicateBtn.addActionListener(e -> { // Changed from addBtn
-            int selectedIndex = layersList.getSelectedIndex();
-            if (selectedIndex != -1) {
-                // Instruct Main to duplicate the element
-                mainFrame.duplicatePaintElement(selectedIndex);
-                // Main.duplicatePaintElement will handle adding the new layer to the list
-                // and selecting it.
+            int[] selectedIndices = layersList.getSelectedIndices();
+            if (selectedIndices.length > 0) {
+                mainFrame.duplicatePaintElements(selectedIndices);
             } else {
                 JOptionPane.showMessageDialog(ToolboxFrame.this, "Please select a layer to duplicate.", "No Layer Selected", JOptionPane.INFORMATION_MESSAGE);
             }
@@ -387,43 +397,33 @@ public class ToolboxFrame extends JFrame {
         });
 
         deleteBtn.addActionListener(e -> {
-            int selectedIndex = layersList.getSelectedIndex();
-            if (selectedIndex != -1) {
-                String layerName = layersModel.getElementAt(selectedIndex);
+            int[] selectedIndices = layersList.getSelectedIndices();
+            if (selectedIndices.length > 0) {
+                String layerName = selectedIndices.length == 1
+                        ? layersModel.getElementAt(selectedIndices[0])
+                        : selectedIndices.length + " selected layers";
                 int confirm = JOptionPane.showConfirmDialog(ToolboxFrame.this,
                         "Are you sure you want to delete layer '" + layerName + "'?",
                         "Delete Layer",
                         JOptionPane.YES_NO_OPTION);
                 if (confirm == JOptionPane.YES_OPTION) {
-                    // Notify Main to remove the corresponding PaintElement
-                    // Main will then update the layersModel via updateToolboxLayerList
-                    mainFrame.deletePaintElement(selectedIndex);
-                    logger.info("Delete request for layer: " + layerName + " at JList index " + selectedIndex);
+                    mainFrame.deletePaintElements(selectedIndices);
+                    logger.info("Delete request for {} layer(s)", selectedIndices.length);
                 }
             }
         });
 
         upBtn.addActionListener(e -> {
-            int selectedIndex = layersList.getSelectedIndex();
-            if (selectedIndex > 0) {
-                String temp = layersModel.getElementAt(selectedIndex);
-                layersModel.setElementAt(layersModel.getElementAt(selectedIndex - 1), selectedIndex);
-                layersModel.setElementAt(temp, selectedIndex - 1);
-                layersList.setSelectedIndex(selectedIndex - 1);
-                mainFrame.moveLayerUp(selectedIndex); // Notify Main to reorder PaintElement
-                logger.info("Moved layer up: " + temp + " from index " + selectedIndex);
+            int[] selectedIndices = layersList.getSelectedIndices();
+            if (selectedIndices.length > 0) {
+                mainFrame.moveLayersUp(selectedIndices);
             }
         });
 
         downBtn.addActionListener(e -> {
-            int selectedIndex = layersList.getSelectedIndex();
-            if (selectedIndex != -1 && selectedIndex < layersModel.getSize() - 1) {
-                String temp = layersModel.getElementAt(selectedIndex);
-                layersModel.setElementAt(layersModel.getElementAt(selectedIndex + 1), selectedIndex);
-                layersModel.setElementAt(temp, selectedIndex + 1);
-                layersList.setSelectedIndex(selectedIndex + 1);
-                mainFrame.moveLayerDown(selectedIndex); // Notify Main to reorder PaintElement
-                logger.info("Moved layer down: " + temp + " from index " + selectedIndex);
+            int[] selectedIndices = layersList.getSelectedIndices();
+            if (selectedIndices.length > 0) {
+                mainFrame.moveLayersDown(selectedIndices);
             }
         });
 
@@ -899,23 +899,64 @@ public class ToolboxFrame extends JFrame {
     // Method to update the entire layers list from a list of names
     public void updateLayersList(java.util.List<String> layerNames) {
         layersModel.clear();
-        // Add in reverse order so topmost (last in list) is at index 0 (top of JList)
-        for (int i = layerNames.size() - 1; i >= 0; i--) {
-            layersModel.addElement(layerNames.get(i));
+        for (String layerName : layerNames) {
+            layersModel.addElement(layerName);
         }
     }
 
     // Method to select a layer in the list by index (from paintElements list)
     public void selectLayerInList(int paintElementIndex) {
-        int jListIndex = layersModel.size() - 1 - paintElementIndex;
+        int jListIndex = paintElementIndex;
         if (layersList != null && jListIndex >= 0 && jListIndex < layersModel.size()) {
-            layersList.setSelectedIndex(jListIndex);
-            layersList.ensureIndexIsVisible(jListIndex);
+            suppressLayerSelectionEvents = true;
+            try {
+                layersList.setSelectedIndex(jListIndex);
+                layersList.ensureIndexIsVisible(jListIndex);
+            } finally {
+                suppressLayerSelectionEvents = false;
+            }
+        }
+    }
+
+    public void selectLayersInList(java.util.List<Integer> paintElementIndices, int primaryPaintElementIndex) {
+        if (layersList == null) {
+            return;
+        }
+
+        suppressLayerSelectionEvents = true;
+        try {
+            layersList.clearSelection();
+            if (paintElementIndices == null || paintElementIndices.isEmpty()) {
+                return;
+            }
+
+            for (Integer paintIndex : paintElementIndices) {
+                if (paintIndex == null) {
+                    continue;
+                }
+                int jListIndex = paintIndex;
+                if (jListIndex >= 0 && jListIndex < layersModel.size()) {
+                    layersList.addSelectionInterval(jListIndex, jListIndex);
+                }
+            }
+
+            int leadIndex = primaryPaintElementIndex;
+            if (leadIndex >= 0 && leadIndex < layersModel.size()) {
+                layersList.getSelectionModel().setLeadSelectionIndex(leadIndex);
+                layersList.ensureIndexIsVisible(leadIndex);
+            }
+        } finally {
+            suppressLayerSelectionEvents = false;
         }
     }
 
     public void clearLayerSelection() {
-        layersList.clearSelection();
+        suppressLayerSelectionEvents = true;
+        try {
+            layersList.clearSelection();
+        } finally {
+            suppressLayerSelectionEvents = false;
+        }
     }
 
     // Method to clear all layers from the list
