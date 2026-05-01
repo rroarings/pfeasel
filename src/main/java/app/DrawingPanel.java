@@ -259,13 +259,13 @@ public class DrawingPanel extends JPanel {
                     if (toolboxFrame == null) {
                         return;
                     }
-                    String text = toolboxFrame.getTextInput();
+                    String text = toolboxFrame.getCurrentText();
                     if (text.isEmpty()) {
                         JOptionPane.showMessageDialog(host, "Please enter text in the toolbox first.", "Text Input Empty", JOptionPane.INFORMATION_MESSAGE);
                         return;
                     }
 
-                    Font font = toolboxFrame.getSelectedFont();
+                    Font font = toolboxFrame.getCurrentFont();
                     Color color = toolboxFrame.getFillColor();
                     if (!toolboxFrame.isFillEnabled()) {
                         color = toolboxFrame.isStrokeEnabled() ? toolboxFrame.getStrokeColor() : Color.BLACK;
